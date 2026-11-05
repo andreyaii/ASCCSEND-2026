@@ -12,7 +12,7 @@ export default {
         line: 'rgb(var(--color-line) / <alpha-value>)',
         ink: 'rgb(var(--color-ink) / <alpha-value>)',
         muted: 'rgb(var(--color-muted) / <alpha-value>)',
-        star: '#b7791f',
+        star: '#f5c518',
       },
       fontFamily: {
         display: ['Syne', 'sans-serif'],

@@ -60,8 +60,24 @@ export default function LoginPage() {
     }
   };
 
+  const moveGlow = (event) => {
+    if (event.pointerType === 'touch') return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    event.currentTarget.style.setProperty('--login-glow-x', `${event.clientX - bounds.left}px`);
+    event.currentTarget.style.setProperty('--login-glow-y', `${event.clientY - bounds.top}px`);
+  };
+
+  const centerGlow = (event) => {
+    event.currentTarget.style.setProperty('--login-glow-x', '50%');
+    event.currentTarget.style.setProperty('--login-glow-y', '50%');
+  };
+
   return (
-    <main className="asccsend-login relative flex min-h-screen flex-col overflow-hidden">
+    <main
+      className="asccsend-login relative flex min-h-screen flex-col overflow-hidden"
+      onPointerMove={moveGlow}
+      onPointerLeave={centerGlow}
+    >
       <div className="login-grid" aria-hidden="true" />
       <div className="login-glow" aria-hidden="true" />
       <div className="login-wireframe login-wireframe-left" aria-hidden="true">
@@ -178,10 +194,6 @@ export default function LoginPage() {
               </button>
             </form>
 
-            <button type="button" className="login-passkey" onClick={() => setActivePanel('passkey')}>
-              Use Passkey instead
-            </button>
-
             <div className="login-confidentiality">
               <ShieldCheck className="h-4 w-4 shrink-0 text-[#ff7440]" aria-hidden="true" />
               <span>Evaluations remain strictly confidential until officially published by System Administrators.</span>
@@ -193,8 +205,6 @@ export default function LoginPage() {
       <footer className="relative z-10 flex flex-col items-center justify-between gap-3 border-t border-white/[0.07] px-5 py-4 text-center text-[11px] text-[#74747f] sm:flex-row sm:px-8 sm:text-left lg:px-12">
         <p>ASCCSEND 2026 — CCS Research &amp; Innovation Festival</p>
         <nav className="flex items-center gap-4" aria-label="Footer">
-          <a href="#privacy" className="login-footer-link">Privacy</a>
-          <a href="#terms" className="login-footer-link">Terms</a>
           <span className="login-system-status"><span aria-hidden="true">●</span> System Online</span>
         </nav>
       </footer>
@@ -210,10 +220,10 @@ export default function LoginPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[#ff7440]">
-                  {activePanel === 'agenda' ? 'About the event' : 'Secure sign-in'}
+                  About the event
                 </p>
                 <h2 id="login-dialog-title" className="font-display text-xl font-bold text-white">
-                  {activePanel === 'agenda' ? 'ASCCSEND 2026' : 'Passkey sign-in'}
+                  ASCCSEND 2026
                 </h2>
               </div>
               <button type="button" className="login-dialog-close" onClick={() => setActivePanel('')} aria-label="Close dialog">
@@ -221,16 +231,12 @@ export default function LoginPage() {
               </button>
             </div>
             <p className="mt-4 text-sm leading-6 text-[#a2a2ad]">
-              {activePanel === 'agenda'
-                ? 'ASCCSEND 2026 — CCS Research & Innovation Festival is the official CIT-U CCS portal where students and faculty manage, explore, and evaluate participating project groups across proposals, pitch videos, and documentation.'
-                : 'Passkey authentication is not configured for this showcase environment. Sign in with your account ID or email and password instead.'}
+              ASCCSEND 2026 — CCS Research & Innovation Festival is the official CIT-U CCS portal where students and faculty manage, explore, and evaluate participating project groups across proposals, pitch videos, and documentation.
             </p>
-            {activePanel === 'agenda' && (
-              <div className="mt-5 flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3.5 py-3 text-xs text-[#b9b9c3]">
-                <CalendarDays className="h-4 w-4 text-[#ff7440]" aria-hidden="true" />
-                November 25 – 26, 2026 <span className="text-[#595963]">·</span> CIT-U College of Computer Studies
-              </div>
-            )}
+            <div className="mt-5 flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3.5 py-3 text-xs text-[#b9b9c3]">
+              <CalendarDays className="h-4 w-4 text-[#ff7440]" aria-hidden="true" />
+              November 25 – 26, 2026 <span className="text-[#595963]">·</span> CIT-U College of Computer Studies
+            </div>
           </section>
         </div>
       )}

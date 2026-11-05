@@ -30,7 +30,6 @@ export default function AppLayout() {
       aria-pressed={theme === 'dark'}
     >
       {theme === 'dark' ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
-      <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
     </button>
   );
 
@@ -71,10 +70,12 @@ export default function AppLayout() {
         ))}
       </nav>
       <div className="space-y-2 border-t border-line p-3">
-        <div className="px-3">{themeToggle}</div>
-        <div className="mb-2 px-3">
-          <p className="truncate text-sm font-bold">{user.name}</p>
-          <span className={isFaculty(user) ? 'badge-primary' : 'badge-green'}>{roleLabel}</span>
+        <div className="mb-2 flex items-center justify-between gap-2 px-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold">{user.name}</p>
+            <span className={isFaculty(user) ? 'badge-primary' : 'badge-green'}>{roleLabel}</span>
+          </div>
+          {themeToggle}
         </div>
         <button className="flex w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-semibold text-muted transition hover:bg-red-50 hover:text-red-600" onClick={() => setConfirmLogout(true)}>
           <LogOut className="h-4 w-4" /> Logout
@@ -93,15 +94,7 @@ export default function AppLayout() {
           <p className="text-xs text-muted">{user.name}</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="grid h-9 w-9 place-items-center rounded-lg border border-line text-muted transition hover:border-primary/40 hover:text-primary"
-            onClick={toggleTheme}
-            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-            aria-pressed={theme === 'dark'}
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
-          </button>
+          {themeToggle}
           <button onClick={() => setMenuOpen(true)} aria-label="Open navigation menu" aria-expanded={menuOpen} className="rounded-lg p-2 text-ink hover:bg-surface"><Menu className="h-5 w-5" /></button>
         </div>
       </header>

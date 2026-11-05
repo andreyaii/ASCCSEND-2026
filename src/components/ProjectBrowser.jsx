@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Search, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, Search, SlidersHorizontal } from 'lucide-react';
 import ProjectCard from './ProjectCard';
 import { EmptyState } from './Feedback';
 import { useSettings } from '../context/SettingsContext';
@@ -35,20 +35,26 @@ export default function ProjectBrowser({ projects, aggregates = {}, linkFor, bad
         </div>
         <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
           <div className="relative min-w-0">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-          <input className="form-input pl-9" placeholder="Search title, description, category, or group" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search projects" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <input className="form-input pl-9" placeholder="Search title, description, category, or group" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search projects" />
+          </div>
+          <label className="relative block min-w-0">
+            <select className="form-input min-w-0 appearance-none pr-9 sm:w-auto" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Filter by category">
+              <option value="all">All Categories</option>
+              {getCategories().map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+          </label>
+          <label className="relative block min-w-0">
+            <select className="form-input min-w-0 appearance-none pr-9 sm:w-auto" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort projects">
+              <option value="default">Group order</option>
+              <option value="title-asc">Title A–Z</option>
+              <option value="title-desc">Title Z–A</option>
+              {ratingsShown && <option value="top-rated">Top rated</option>}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+          </label>
         </div>
-        <select className="form-input min-w-0 sm:w-auto" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Filter by category">
-          <option value="all">All Categories</option>
-          {getCategories().map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select className="form-input min-w-0 sm:w-auto" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort projects">
-          <option value="default">Group order</option>
-          <option value="title-asc">Title A–Z</option>
-          <option value="title-desc">Title Z–A</option>
-          {ratingsShown && <option value="top-rated">Top rated</option>}
-        </select>
-      </div>
       </section>
 
       <div className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
