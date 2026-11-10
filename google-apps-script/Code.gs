@@ -361,21 +361,28 @@ function doPost(e) {
           // STUDENT LOGIN
           // Uses the exact spreadsheet column headers.
 
-          const studentNo = String(
-            u["STUDENT NO."] || ""
-          ).trim();
+          const studentNo = String(getStudentField(u, [
+            "student no.",
+            "student number",
+            "student id"
+          ]) || "").trim();
 
-          const studentName = String(
-            u["NAME OF STUDENT"] || ""
-          ).trim();
+          const studentName = String(getStudentField(u, [
+            "name of student",
+            "student name",
+            "full name",
+            "name"
+          ]) || "").trim();
 
-          const memberNo = String(
-            u["MEMBER #"] || ""
-          ).trim();
+          const memberNo = String(getStudentField(u, [
+            "member #",
+            "member number"
+          ]) || "").trim();
 
-          const studentPin = String(
-            u["PIN"] || ""
-          ).trim();
+          const studentPin = String(getStudentField(u, [
+            "pin",
+            "password"
+          ]) || "").trim();
 
           const matchesIdentifier =
             studentNo === identifier ||
@@ -413,12 +420,30 @@ function doPost(e) {
       return responseJSON({
         success: true,
         user: {
-          StudentID: user["STUDENT NO."] || user["MEMBER #"],
-          StudentNo: user["STUDENT NO."],
-          FullName: user["NAME OF STUDENT"],
-          GroupCode: user["GROUP CODE"],
-          Program: user["PROGRAM"],
-          Sec: user["SEC"]
+          StudentID: getStudentField(user, [
+            "student no.",
+            "student number",
+            "student id",
+            "member #",
+            "member number"
+          ]),
+          StudentNo: getStudentField(user, [
+            "student no.",
+            "student number",
+            "student id"
+          ]),
+          FullName: getStudentField(user, [
+            "name of student",
+            "student name",
+            "full name",
+            "name"
+          ]),
+          GroupCode: getStudentField(user, [
+            "group code",
+            "groupcode"
+          ]),
+          Program: getStudentField(user, ["program"]),
+          Sec: getStudentField(user, ["sec", "section"])
         },
         role: "student"
       });

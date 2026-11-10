@@ -60,7 +60,7 @@ export default function AppLayout() {
       <div className="flex items-center gap-3 border-b border-line px-5 py-5">
         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-white"><GraduationCap className="h-5 w-5" /></span>
         <div>
-          <p className="font-display text-lg font-bold leading-tight">TechCon</p>
+          <p className="font-display text-lg font-bold leading-tight">TekCon 2026</p>
           <p className="text-[11px] text-muted">Project Showcase & Evaluation</p>
         </div>
       </div>
@@ -90,7 +90,7 @@ export default function AppLayout() {
 
       <header className="sticky top-0 z-40 flex items-center justify-between border-b border-line bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
         <div>
-          <p className="font-display text-lg font-bold leading-tight">TechCon</p>
+          <p className="font-display text-lg font-bold leading-tight">TekCon 2026</p>
           <p className="text-xs text-muted">{user.name}</p>
         </div>
         <div className="flex items-center gap-2">

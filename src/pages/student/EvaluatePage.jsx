@@ -84,7 +84,7 @@ export default function EvaluatePage() {
       <EvaluationCounter status={status} />
 
       <form className="card p-5 sm:p-7" onSubmit={(e) => { e.preventDefault(); if (complete) setConfirming(true); }}>
-        <p className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900">Evaluation criteria are placeholders pending instructor confirmation. Current scoring gives each criterion equal weight.</p>
+        <p className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900">Rate the logo, documentation, pitch video, and poster. Each criterion has equal weight.</p>
 
         <div className="divide-y divide-line">
         {criteria.map((c, index) => (

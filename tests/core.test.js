@@ -3,9 +3,11 @@ import { beforeEach, test } from 'node:test';
 import { evaluations as seedEvaluations } from '../src/data/evaluations.js';
 import { initialSettings } from '../src/data/settings.js';
 import { checkEligibility } from '../src/services/evaluationAssignment.js';
-import { submitEvaluation } from '../src/services/evaluationService.js';
+import { getEligibility, getEvaluationsByEvaluator, submitEvaluation } from '../src/services/evaluationService.js';
 import { load, save } from '../src/services/mockStore.js';
 import { students } from '../src/data/students.js';
+import { groups } from '../src/data/groups.js';
+import { evaluationCriteria } from '../src/data/settings.js';
 import { calcOverall } from '../src/utils/ratings.js';
 
 const entries = new Map();
@@ -20,17 +22,77 @@ globalThis.window = {
     removeItem: (key) => entries.delete(key),
   },
 };
-
-const validRatings = { c1: 4, c2: 4, c3: 4, c4: 4, c5: 4 };
+const validRatings = { c1: 4, c2: 4, c3: 4, c4: 4 };
 
 beforeEach(() => {
   entries.clear();
-  entries.set('techcon:session', JSON.stringify({ userId: 's1' }));
+  entries.set('techcon:session', JSON.stringify({ user: students.find((student) => student.id === 's1') }));
   failWrites = false;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    success: true,
+    data: groups.map((group) => ({
+      groupCode: group.id,
+      title: group.groupName,
+      tag: 'Test',
+    })),
+  }), { headers: { 'Content-Type': 'application/json' } });
+});
+
+test('sheet-backed student can evaluate another sheet-backed group', async () => {
+  const student = {
+    id: 'STD-104',
+    accountType: 'Student',
+    groupId: 'GROUP-A',
+  };
+  entries.set('techcon:session', JSON.stringify({ user: student }));
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    success: true,
+    data: [
+      { groupCode: 'GROUP-A', title: 'Own Group', tag: 'Test' },
+      { groupCode: 'GROUP-B', title: 'Other Group', tag: 'Test' },
+    ],
+  }), { headers: { 'Content-Type': 'application/json' } });
+
+  save('evaluations', []);
+  const eligibility = await getEligibility(student.id, 'GROUP-B');
+  assert.equal(eligibility.canEvaluate, true);
+
+  const submitted = await submitEvaluation({
+    evaluatorId: student.id,
+    evaluatedGroupId: 'GROUP-B',
+    ratings: validRatings,
+  });
+  const mine = await getEvaluationsByEvaluator(student.id);
+  assert.equal(mine.some((evaluation) => evaluation.id === submitted.id), true);
 });
 
 test('overall score uses configured criteria only', () => {
   assert.equal(calcOverall({ ...validRatings, unconfigured: 1 }), 4);
+});
+
+test('evaluation uses logo, documentation, pitch video, and poster criteria', () => {
+  assert.deepEqual(evaluationCriteria.map((criterion) => criterion.label), [
+    'Logo',
+    'Documentation',
+    'Pitch Video',
+    'Poster',
+  ]);
+});
+
+test('previous five-criterion evaluations remain readable', async () => {
+  const legacyEvaluation = {
+    id: 'legacy-eval',
+    evaluatorId: 's1',
+    evaluatedGroupId: 'g7',
+    ratings: { c1: 3, c2: 4, c3: 5, c4: 3, c5: 4 },
+    overallScore: 3.8,
+    comments: '',
+    submittedAt: new Date().toISOString(),
+  };
+  entries.set('techcon:evaluations', JSON.stringify([...seedEvaluations, legacyEvaluation]));
+
+  const mine = await getEvaluationsByEvaluator('s1');
+  assert.equal(mine.some((evaluation) => evaluation.id === 'legacy-eval'), true);
 });
 
 test('eligibility blocks self, duplicate, and over-limit evaluations', async () => {
@@ -62,7 +124,7 @@ test('eligibility blocks self, duplicate, and over-limit evaluations', async () 
 
 test('submission validates ratings and saves only configured ratings', async () => {
   await assert.rejects(
-    submitEvaluation({ evaluatorId: 's1', evaluatedGroupId: 'g4', ratings: { ...validRatings, c5: 6 } }),
+    submitEvaluation({ evaluatorId: 's1', evaluatedGroupId: 'g4', ratings: { ...validRatings, c1: 6 } }),
     /rate every criterion/
   );
   await assert.rejects(

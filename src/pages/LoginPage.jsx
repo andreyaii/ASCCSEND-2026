@@ -89,10 +89,10 @@ export default function LoginPage() {
       </svg>
 
       <header className="relative z-10 flex items-center justify-between gap-4 px-5 py-5 sm:px-8 lg:px-12">
-        <a href="/login" className="login-brand" aria-label="ASCCSEND 2026 home">
+        <a href="/login" className="login-brand" aria-label="TekCon 2026 home">
           <span className="login-brand-mark" aria-hidden="true">T</span>
           <span className="login-brand-name">
-            AS<span>CCS</span>END 2026
+            TekCon <span>2026</span>
           </span>
         </a>
         <div className="flex items-center gap-2 sm:gap-3">
@@ -117,7 +117,7 @@ export default function LoginPage() {
             Elevating Ideas.<br /><span className="login-headline-line">Advancing Innovation.</span>
           </h1>
           <p className="login-subtitle">
-            ASCCSEND 2026 — CCS Research &amp; Innovation Festival
+            TekCon 2026 — Project Showcase &amp; Innovation Festival
           </p>
 
           <div className="login-card mx-auto w-full max-w-[470px] text-left">
@@ -203,7 +203,7 @@ export default function LoginPage() {
       </div>
 
       <footer className="relative z-10 flex flex-col items-center justify-between gap-3 border-t border-white/[0.07] px-5 py-4 text-center text-[11px] text-[#74747f] sm:flex-row sm:px-8 sm:text-left lg:px-12">
-        <p>ASCCSEND 2026 — CCS Research &amp; Innovation Festival</p>
+        <p>TekCon 2026 — Project Showcase &amp; Innovation Festival</p>
         <nav className="flex items-center gap-4" aria-label="Footer">
           <span className="login-system-status"><span aria-hidden="true">●</span> System Online</span>
         </nav>
@@ -223,7 +223,7 @@ export default function LoginPage() {
                   About the event
                 </p>
                 <h2 id="login-dialog-title" className="font-display text-xl font-bold text-white">
-                  ASCCSEND 2026
+                  TekCon 2026
                 </h2>
               </div>
               <button type="button" className="login-dialog-close" onClick={() => setActivePanel('')} aria-label="Close dialog">
@@ -231,7 +231,7 @@ export default function LoginPage() {
               </button>
             </div>
             <p className="mt-4 text-sm leading-6 text-[#a2a2ad]">
-              ASCCSEND 2026 — CCS Research & Innovation Festival is the official CIT-U CCS portal where students and faculty manage, explore, and evaluate participating project groups across proposals, pitch videos, and documentation.
+              TekCon 2026 is the CIT-U project showcase and evaluation event where students and faculty present, explore, and evaluate participating projects.
             </p>
             <div className="mt-5 flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3.5 py-3 text-xs text-[#b9b9c3]">
               <CalendarDays className="h-4 w-4 text-[#ff7440]" aria-hidden="true" />

@@ -8,17 +8,21 @@ import { getSettings } from './settingsService.js';
 import { delay, load, save } from './mockStore.js';
 import { getCurrentUser } from './authService.js';
 import { isAdmin, isFaculty, isStudent } from '../utils/roles.js';
+import { getProjects } from './projectService.js';
 
 const all = () => {
   const evaluations = load('evaluations', seed);
   if (!Array.isArray(evaluations)) throw new Error('Saved evaluations are invalid. Reset the demo data before continuing.');
   const ids = new Set();
   const evaluatedPairs = new Set();
+  const legacyCriteria = [...evaluationCriteria, { id: 'c5' }];
   const valid = evaluations.every((evaluation) => {
     if (!evaluation || typeof evaluation !== 'object'
       || typeof evaluation.id !== 'string'
-      || !students.some((student) => student.id === evaluation.evaluatorId)
-      || !groups.some((group) => group.id === evaluation.evaluatedGroupId)
+      || typeof evaluation.evaluatorId !== 'string'
+      || !evaluation.evaluatorId.trim()
+      || typeof evaluation.evaluatedGroupId !== 'string'
+      || !evaluation.evaluatedGroupId.trim()
       || !evaluation.ratings || typeof evaluation.ratings !== 'object'
       || !Number.isFinite(evaluation.overallScore)
       || typeof evaluation.comments !== 'string'
@@ -27,10 +31,13 @@ const all = () => {
     if (ids.has(evaluation.id) || evaluatedPairs.has(pair)) return false;
     ids.add(evaluation.id);
     evaluatedPairs.add(pair);
-    return evaluationCriteria.every((criterion) => {
+    const criteria = Object.hasOwn(evaluation.ratings, 'c5')
+      ? legacyCriteria
+      : evaluationCriteria;
+    return criteria.every((criterion) => {
       const rating = evaluation.ratings[criterion.id];
       return Number.isInteger(rating) && rating >= 1 && rating <= RATING_SCALE;
-    }) && evaluation.overallScore === calcOverall(evaluation.ratings, evaluationCriteria);
+    }) && evaluation.overallScore === calcOverall(evaluation.ratings, criteria);
   });
   if (!valid) throw new Error('Saved evaluation records are invalid. Reset the demo data before continuing.');
   return evaluations;
@@ -42,6 +49,7 @@ function requireCurrentStudent(studentId) {
   if (!currentUser || currentUser.id !== studentId || !isStudent(currentUser)) {
     throw new Error('Only the currently signed-in student can submit or view their evaluation status.');
   }
+  return currentUser;
 }
 
 function requireDemoAdmin(user) {
@@ -83,13 +91,19 @@ export async function getAggregates() {
 }
 
 export async function getEligibility(studentId, targetGroupId) {
-  requireCurrentStudent(studentId);
+  const student = requireCurrentStudent(studentId);
   await delay(50);
-  const student = students.find((s) => s.id === studentId);
+  const projects = await getProjects();
   const settings = await getSettings();
   const existing = all().filter((e) => e.evaluatorId === studentId);
   return {
-    ...checkEligibility({ student, targetGroupId, existing, allGroups: groups, settings }),
+    ...checkEligibility({
+      student,
+      targetGroupId,
+      existing,
+      allGroups: projects.map((project) => ({ id: project.groupId })),
+      settings,
+    }),
     submitted: existing.length,
     limit: settings.evaluationLimit,
     remaining: Math.max(settings.evaluationLimit - existing.length, 0),
@@ -98,19 +112,19 @@ export async function getEligibility(studentId, targetGroupId) {
 
 // Eligibility, ratings, comments, and current session are revalidated on every submit.
 export async function submitEvaluation({ evaluatorId, evaluatedGroupId, ratings, comments }) {
-  requireCurrentStudent(evaluatorId);
+  const student = requireCurrentStudent(evaluatorId);
   if (submissionsInProgress.has(evaluatorId)) throw new Error('An evaluation is already being submitted. Please wait.');
   submissionsInProgress.add(evaluatorId);
   try {
     await delay(300);
-    const student = students.find((s) => s.id === evaluatorId);
+    const projects = await getProjects();
     const settings = await getSettings();
     const list = all();
     const check = checkEligibility({
       student,
       targetGroupId: evaluatedGroupId,
       existing: list.filter((e) => e.evaluatorId === evaluatorId),
-      allGroups: groups,
+      allGroups: projects.map((project) => ({ id: project.groupId })),
       settings,
     });
     if (!check.canEvaluate) throw new Error(check.reason);

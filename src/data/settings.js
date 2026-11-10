@@ -6,12 +6,10 @@ export const initialSettings = {
   commentMaxLength: 500,
 };
 
-// PLACEHOLDER criteria: replace labels/descriptions once the instructor finalizes them.
 export const evaluationCriteria = [
-  { id: 'c1', label: 'Criterion 1 (placeholder)', description: 'Replace with final criterion, e.g. innovation.' },
-  { id: 'c2', label: 'Criterion 2 (placeholder)', description: 'Replace with final criterion, e.g. technical quality.' },
-  { id: 'c3', label: 'Criterion 3 (placeholder)', description: 'Replace with final criterion, e.g. usability.' },
-  { id: 'c4', label: 'Criterion 4 (placeholder)', description: 'Replace with final criterion, e.g. documentation.' },
-  { id: 'c5', label: 'Criterion 5 (placeholder)', description: 'Replace with final criterion, e.g. presentation.' },
+  { id: 'c1', label: 'Logo', description: 'Rate the project logo’s visual quality and relevance.' },
+  { id: 'c2', label: 'Documentation', description: 'Rate the clarity and completeness of the project documentation.' },
+  { id: 'c3', label: 'Pitch Video', description: 'Rate the clarity and effectiveness of the project pitch video.' },
+  { id: 'c4', label: 'Poster', description: 'Rate the poster’s visual quality and presentation of the project.' },
 ];
 export const RATING_SCALE = 5;

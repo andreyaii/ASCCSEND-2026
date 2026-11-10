@@ -1,4 +1,4 @@
-import { request } from '../config/apiConfig';
+import { request } from '../config/apiConfig.js';
 
 /**
  * Hydrates a project/group object from the Google Sheets API response
@@ -43,8 +43,12 @@ export async function getProjectById(id) {
 }
 
 export async function getProjectByGroupId(groupId) {
+  const normalizeGroupId = (value) => String(value || '').trim().replace(/\s+/g, '').toUpperCase();
+  const normalizedGroupId = normalizeGroupId(groupId);
+  if (!normalizedGroupId) return null;
+
   const projects = await getProjects();
-  return projects.find((x) => x.groupId === groupId) || null;
+  return projects.find((project) => normalizeGroupId(project.groupId) === normalizedGroupId) || null;
 }
 
 export async function getCategories() {
