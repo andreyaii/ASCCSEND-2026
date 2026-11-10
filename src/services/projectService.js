@@ -1,37 +1,54 @@
-import { projects } from '../data/projects';
-import { groups } from '../data/groups';
-import { students } from '../data/students';
-import { delay } from './mockStore';
+import { request } from '../config/apiConfig';
 
-// Project + its group (with resolved members).
-const hydrate = (p) => {
-  const g = groups.find((x) => x.id === p.groupId);
-  return {
-    ...p,
-    group: g
-      ? { ...g, members: (g.memberIds || []).map((id) => students.find((s) => s.id === id)).filter(Boolean) }
-      : { id: p.groupId, groupName: 'Group information unavailable', members: [] },
-  };
-};
+/**
+ * Hydrates a project/group object from the Google Sheets API response
+ * so it matches the data shape expected by your UI components.
+ */
+const hydrate = (g) => ({
+  id: g.groupCode,
+  groupId: g.groupCode,
+  groupCode: g.groupCode,
+  title: g.title || 'Untitled Project',
+  description: g.description || '',
+  tag: g.tag || 'General',
+  category: g.tag || 'General',
+  stage: g.stage || 'Proposal',
+  facultyId: g.facultyId || null,
+  thumbnail: g.thumbnail || '',
+  proposalLink: g.proposalLink || '',
+  pitchVideoLink: g.pitchVideoLink || '',
+  documentationLink: g.documentationLink || g.posterLink || '',
+  posterLink: g.posterLink || g.documentationLink || '',
+  group: {
+    id: g.groupCode,
+    groupCode: g.groupCode,
+    groupName: g.title || g.groupCode,
+    members: Array.isArray(g.members) ? g.members : []
+  }
+});
 
 export async function getProjects({ excludeGroupId, groupIds } = {}) {
-  await delay();
-  return projects
+  const response = await request('getProjects');
+  const rawGroups = response.data || [];
+
+  return rawGroups
+    .map(hydrate)
     .filter((p) => p.groupId !== excludeGroupId)
-    .filter((p) => !groupIds || groupIds.includes(p.groupId))
-    .map(hydrate);
+    .filter((p) => !groupIds || groupIds.includes(p.groupId));
 }
 
 export async function getProjectById(id) {
-  await delay();
-  const p = projects.find((x) => x.id === id);
-  return p ? hydrate(p) : null;
+  const projects = await getProjects();
+  return projects.find((x) => x.id === id || x.groupId === id) || null;
 }
 
 export async function getProjectByGroupId(groupId) {
-  await delay();
-  const p = projects.find((x) => x.groupId === groupId);
-  return p ? hydrate(p) : null;
+  const projects = await getProjects();
+  return projects.find((x) => x.groupId === groupId) || null;
 }
 
-export const getCategories = () => [...new Set(projects.map((p) => p.category).filter(Boolean))].sort();
+export async function getCategories() {
+  const projects = await getProjects();
+  const categories = projects.map((p) => p.category).filter(Boolean);
+  return [...new Set(categories)].sort();
+}

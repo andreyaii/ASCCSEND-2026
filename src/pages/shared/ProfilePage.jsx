@@ -28,12 +28,15 @@ export default function ProfilePage() {
         </div>
         <dl className="grid gap-4 sm:grid-cols-2">
           <Field label="Name">{user.name}</Field>
-          <Field label={student ? 'Student ID' : 'Faculty ID'}>{student ? user.studentId : user.facultyId}</Field>
+          <Field label={student ? 'Student ID' : 'Faculty ID'}>{student ? user.studentNo : user.facultyId}</Field>
           <Field label="Email">{user.email}</Field>
           <Field label="Account type">{user.accountType}</Field>
           {!student && <Field label="Faculty role">{user.role}</Field>}
-          {student && <Field label="Group">{data.group?.groupName ?? '–'}</Field>}
-          {student && <Field label="Project">{data.project?.title ?? '–'}</Field>}
+          {student && (
+  <Field label="Group">
+    {user.GroupCode || '–'}
+  </Field>
+)}          {student && <Field label="Project">{data.project?.title ?? '–'}</Field>}
           {!student && <Field label="Assigned groups">{user.assignedGroupIds?.length ?? 0}</Field>}
         </dl>
       </section>

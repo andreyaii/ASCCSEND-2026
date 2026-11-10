@@ -2,18 +2,19 @@ import { FileText, PlayCircle, BookOpen, ExternalLink } from 'lucide-react';
 
 // Three separate resources: Proposal, Pitch Video, Documentation.
 const items = [
-  { key: 'proposalUrl', label: 'Proposal', icon: FileText },
-  { key: 'pitchVideoUrl', label: 'Pitch Video', icon: PlayCircle },
-  { key: 'documentationUrl', label: 'Documentation', icon: BookOpen },
+  { key: 'proposalLink', legacyKey: 'proposalUrl', label: 'Proposal', icon: FileText },
+  { key: 'pitchVideoLink', legacyKey: 'pitchVideoUrl', label: 'Pitch Video', icon: PlayCircle },
+  { key: 'documentationLink', legacyKey: 'documentationUrl', label: 'Poster', icon: BookOpen },
 ];
 
 export default function ResourceLinks({ project }) {
   return (
     <div className="flex flex-wrap gap-2">
-      {items.map(({ key, label, icon: Icon }) => {
+      {items.map(({ key, legacyKey, label, icon: Icon }) => {
+        const resource = project?.[key] || project?.[legacyKey];
         let safeUrl = null;
         try {
-          const parsed = new URL(project?.[key]);
+          const parsed = new URL(resource);
           if (['http:', 'https:'].includes(parsed.protocol) && parsed.hostname && !parsed.username && !parsed.password) {
             safeUrl = parsed.href;
           }
@@ -26,7 +27,7 @@ export default function ResourceLinks({ project }) {
           </a>
         ) : (
           <span key={key} className="btn-secondary cursor-not-allowed opacity-50">
-            <Icon className="h-4 w-4" /> {label} ({project?.[key] ? 'unavailable' : 'not submitted'})
+            <Icon className="h-4 w-4" /> {label} ({resource ? 'unavailable' : 'not submitted'})
           </span>
         );
       })}

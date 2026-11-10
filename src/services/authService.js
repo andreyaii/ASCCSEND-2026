@@ -1,32 +1,62 @@
-import { students } from '../data/students.js';
-import { faculty } from '../data/faculty.js';
-import { delay, load, save, remove } from './mockStore.js';
-import { setAuthToken } from '../config/apiConfig.js';
 
-const MOCK_PASSWORD = 'techcon123';
-export const DEMO_ACCOUNTS = [
-  { label: 'Student', email: 'student@techcon.edu', password: MOCK_PASSWORD },
-  { label: 'Faculty Adviser', email: 'adviser@techcon.edu', password: MOCK_PASSWORD },
-  { label: 'Faculty Admin', email: 'admin@techcon.edu', password: MOCK_PASSWORD },
-];
+import { request, setAuthToken } from '../config/apiConfig.js';
+import { load, save, remove } from './mockStore.js';
 
-// Session only stores the user id; the user record is re-read from the data source.
+/**
+ * Sends authentication request to Google Apps Script backend.
+ */
 export async function login(identifier, password, role) {
-  await delay(300);
-  const normalizedIdentifier = identifier.trim().toLowerCase();
-  const user = [...students, ...faculty].find((account) => {
-    const matchesIdentifier = [account.email, account.studentId, account.facultyId]
-      .filter(Boolean)
-      .some((value) => value.toLowerCase() === normalizedIdentifier);
-    if (!matchesIdentifier) return false;
-    if (role === 'Student') return account.accountType === 'Student';
-    if (role === 'Faculty') return account.accountType === 'Faculty';
-    return true;
+  const response = await request('login', {
+    method: 'POST',
+    body: {
+      identifier: identifier.trim(),
+      password: password.trim(),
+      role: role || 'Student'
+    }
   });
-  if (!user || password !== MOCK_PASSWORD) throw new Error(`Invalid ${role || 'account'} ID or password.`);
-  save('session', { userId: user.id }, { replaceCorrupt: true });
-  setAuthToken('demo-only-mock-token');
-  return user;
+
+  if (!response.success || !response.user) {
+    throw new Error(
+      response.message || `Invalid ${role || 'account'} credentials.`
+    );
+  }
+
+  const user = response.user;
+  const normalizedRole = (response.role || role || 'Student').toLowerCase();
+
+  const isFaculty =
+    normalizedRole === 'faculty' ||
+    normalizedRole === 'admin' ||
+    normalizedRole === 'adviser';
+
+  // Normalize profile fields for the frontend.
+  const sessionUser = {
+    ...user,
+
+    // Common fields
+    id: user.StudentID || user.FacultyID || user.id,
+    name: user.FullName || user.name || user.NAME || '',
+    
+    // Student fields
+    groupId: user.GroupCode || user.groupId || '',
+    studentNo: user.StudentNo || user.studentNo || '',
+    program: user.Program || user.program || '',
+    sec: user.Sec || user.sec || '',
+
+    // Role fields
+    accountType: isFaculty ? 'Faculty' : 'Student',
+    role:
+      normalizedRole === 'admin'
+        ? 'Admin'
+        : normalizedRole === 'adviser' || normalizedRole === 'faculty'
+          ? 'Adviser'
+          : 'Student'
+  };
+
+  save('session', { user: sessionUser }, { replaceCorrupt: true });
+  setAuthToken(`gas-token-${sessionUser.id}`);
+
+  return sessionUser;
 }
 
 export function logout() {
@@ -36,12 +66,15 @@ export function logout() {
 
 export function getCurrentUser() {
   let session;
+
   try {
     session = load('session', null);
   } catch (error) {
-    console.error(error);
+    console.error('Failed to load session:', error);
     return null;
   }
-  if (!session || typeof session.userId !== 'string') return null;
-  return [...students, ...faculty].find((u) => u.id === session.userId) || null;
+
+  if (!session || !session.user) return null;
+
+  return session.user;
 }

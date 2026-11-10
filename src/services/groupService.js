@@ -1,21 +1,35 @@
-import { groups } from '../data/groups';
-import { students } from '../data/students';
-import { faculty } from '../data/faculty';
-import { delay } from './mockStore';
 
-const withMembers = (g) => ({
-  ...g,
-  members: g.memberIds.map((id) => students.find((s) => s.id === id)).filter(Boolean),
-  advisers: g.adviserIds.map((id) => faculty.find((f) => f.id === id)).filter(Boolean),
-});
+import { request } from '../config/apiConfig';
+import { getProjects } from './projectService';
 
+/**
+ * Retrieves actual groups from Google Sheets
+ * and formats them for the frontend.
+ */
 export async function getGroups() {
-  await delay();
-  return groups.map(withMembers);
+  const projects = await getProjects();
+
+  return projects.map((project) => ({
+    ...project,
+    id: project.groupCode,
+    groupCode: project.groupCode,
+    groupName: project.title || project.groupCode,
+    title: project.title,
+    members: project.group?.members || [],
+    advisers: []
+  }));
 }
 
-export async function getGroupById(id) {
-  await delay();
-  const g = groups.find((x) => x.id === id);
-  return g ? withMembers(g) : null;
+/**
+ * Finds a group using its GroupCode.
+ */
+export async function getGroupById(groupCode) {
+  if (!groupCode) return null;
+
+  const groups = await getGroups();
+
+  return groups.find(
+    (group) =>
+      String(group.groupCode).trim() === String(groupCode).trim()
+  ) || null;
 }

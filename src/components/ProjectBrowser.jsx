@@ -3,7 +3,6 @@ import { ChevronDown, Search, SlidersHorizontal } from 'lucide-react';
 import ProjectCard from './ProjectCard';
 import { EmptyState } from './Feedback';
 import { useSettings } from '../context/SettingsContext';
-import { getCategories } from '../services/projectService';
 
 // Search + category filter + sort over project cards. Shared by Explore and All Projects.
 export default function ProjectBrowser({ projects, aggregates = {}, linkFor, badgeFor }) {
@@ -11,6 +10,11 @@ export default function ProjectBrowser({ projects, aggregates = {}, linkFor, bad
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [sort, setSort] = useState('default');
+
+  const categories = useMemo(
+    () => [...new Set(projects.map((project) => project.category).filter(Boolean))].sort(),
+    [projects]
+  );
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -41,7 +45,7 @@ export default function ProjectBrowser({ projects, aggregates = {}, linkFor, bad
           <label className="relative block min-w-0">
             <select className="form-input min-w-0 appearance-none pr-9 sm:w-auto" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Filter by category">
               <option value="all">All Categories</option>
-              {getCategories().map((c) => <option key={c} value={c}>{c}</option>)}
+              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
             <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
           </label>
