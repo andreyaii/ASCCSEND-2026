@@ -2,7 +2,8 @@ import { calcOverall } from '../utils/ratings.js';
 
 const ev = (id, evaluatorId, evaluatedGroupId, r, comments, submittedAt) => {
   const ratings = { c1: r[0], c2: r[1], c3: r[2], c4: r[3] };
-  return { id, evaluatorId, evaluatedGroupId, ratings, overallScore: calcOverall(ratings), comments, submittedAt };
+  const legacyCriteria = ['c1', 'c2', 'c3', 'c4'].map((criterionId) => ({ id: criterionId }));
+  return { id, evaluatorId, evaluatedGroupId, ratings, overallScore: calcOverall(ratings, legacyCriteria), comments, submittedAt };
 };
 
 // s1 (Juan, Group 01) already has 2 of 5 evaluations for demo purposes.

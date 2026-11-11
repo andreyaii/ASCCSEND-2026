@@ -10,7 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import { useAsync } from '../../hooks/useAsync';
 import { getProjectById } from '../../services/projectService';
-import { getAggregates, getEligibility, getEvaluationsForGroup, getEvaluationStatus } from '../../services/evaluationService';
+import { getAggregates, getEligibility, getEvaluationsForGroup } from '../../services/evaluationService';
 import { isStudent, basePathFor } from '../../utils/roles';
 import { formatDate, formatScore } from '../../utils/ratings';
 
@@ -68,17 +68,22 @@ export default function ProjectDetailPage() {
   const student = isStudent(user);
   const base = basePathFor(user);
 
-  const { data, loading, error, reload } = useAsync(async () => {
-    const project = await getProjectById(projectId);
+  const { data, loading, error, reload } = useAsync(async (force) => {
+    const project = await getProjectById(projectId, { refresh: force });
     if (!project) return { project: null };
-    const [aggregates, eligibility, status, received] = await Promise.all([
+    const [aggregates, eligibility, received] = await Promise.all([
       getAggregates(),
       student ? getEligibility(user.id, project.groupId) : null,
-      student ? getEvaluationStatus(user.id) : null,
       student ? [] : getEvaluationsForGroup(project.groupId, user),
     ]);
-    return { project, aggregate: aggregates[project.groupId], eligibility, status, received };
-  }, [projectId, user.id]);
+    return {
+      project,
+      aggregate: aggregates[project.groupId],
+      eligibility,
+      status: eligibility,
+      received,
+    };
+  }, [projectId, user.id], `project-detail:${student ? 'student' : 'faculty'}:${user.id}:${projectId}`);
 
   if (loading) return <Loading />;
   if (error) return <ErrorState error={error} onRetry={reload} />;

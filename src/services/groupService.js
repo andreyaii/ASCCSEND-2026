@@ -6,8 +6,8 @@ import { getProjects } from './projectService';
  * Retrieves actual groups from Google Sheets
  * and formats them for the frontend.
  */
-export async function getGroups() {
-  const projects = await getProjects();
+export async function getGroups(options) {
+  const projects = await getProjects(options);
 
   return projects.map((project) => ({
     ...project,
@@ -23,10 +23,10 @@ export async function getGroups() {
 /**
  * Finds a group using its GroupCode.
  */
-export async function getGroupById(groupCode) {
+export async function getGroupById(groupCode, options) {
   if (!groupCode) return null;
 
-  const groups = await getGroups();
+  const groups = await getGroups(options);
 
   return groups.find(
     (group) =>

@@ -5,21 +5,26 @@ import { Loading, ErrorState } from '../../components/Feedback';
 import { useAuth } from '../../context/AuthContext';
 import { useAsync } from '../../hooks/useAsync';
 import { getProjects } from '../../services/projectService';
-import { getAggregates, getEvaluationsByEvaluator, getEvaluationStatus } from '../../services/evaluationService';
+import { getAggregates, getStudentEvaluationData } from '../../services/evaluationService';
 
 export default function ExplorePage() {
   const { user } = useAuth();
   const { data, loading, error, reload } = useAsync(
-    async () => {
-      const [projects, aggregates, mine, status] = await Promise.all([
-        getProjects({ excludeGroupId: user.groupId }), // own group is excluded
+    async (force) => {
+      const [projects, aggregates, evaluationData] = await Promise.all([
+        getProjects({ excludeGroupId: user.groupId, refresh: force }), // own group is excluded
         getAggregates(),
-        getEvaluationsByEvaluator(user.id),
-        getEvaluationStatus(user.id),
+        getStudentEvaluationData(user.id),
       ]);
-      return { projects, aggregates, evaluatedGroupIds: new Set(mine.map((e) => e.evaluatedGroupId)), status };
+      return {
+        projects,
+        aggregates,
+        evaluatedGroupIds: new Set(evaluationData.evaluations.map((e) => e.evaluatedGroupId)),
+        status: evaluationData.status,
+      };
     },
-    [user.id]
+    [user.id],
+    `student-explore:${user.id}:${user.groupId}`,
   );
 
   if (loading) return <Loading />;

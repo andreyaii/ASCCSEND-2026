@@ -8,7 +8,14 @@ import { getAggregates } from '../../services/evaluationService';
 
 export default function AllProjectsPage() {
   const { user } = useAuth();
-  const { data, loading, error, reload } = useAsync(async () => ({ projects: await getProjects(), aggregates: await getAggregates() }), []);
+  const { data, loading, error, reload } = useAsync(
+    async (force) => ({
+      projects: await getProjects({ refresh: force }),
+      aggregates: await getAggregates(),
+    }),
+    [user.id],
+    `faculty-all-projects:${user.id}`,
+  );
 
   if (loading) return <Loading />;
   if (error) return <ErrorState error={error} onRetry={reload} />;

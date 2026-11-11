@@ -28,6 +28,12 @@ export async function login(identifier, password, role) {
     normalizedRole === 'faculty' ||
     normalizedRole === 'admin' ||
     normalizedRole === 'adviser';
+  const sessionToken = typeof response.sessionToken === 'string'
+    ? response.sessionToken.trim()
+    : '';
+  if (!isFaculty && !sessionToken) {
+    throw new Error('The server did not create an authenticated student session. Please try again.');
+  }
 
   // Normalize profile fields for the frontend.
   const sessionUser = {
@@ -53,8 +59,8 @@ export async function login(identifier, password, role) {
           : 'Student'
   };
 
-  save('session', { user: sessionUser }, { replaceCorrupt: true });
-  setAuthToken(`gas-token-${sessionUser.id}`);
+  save('session', { user: sessionUser, sessionToken: sessionToken || null }, { replaceCorrupt: true });
+  setAuthToken(sessionToken);
 
   return sessionUser;
 }
@@ -75,6 +81,7 @@ export function getCurrentUser() {
   }
 
   if (!session || !session.user) return null;
+  setAuthToken(session.sessionToken);
 
   return session.user;
 }

@@ -7,16 +7,23 @@ import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import { useAsync } from '../../hooks/useAsync';
 import { getProjects } from '../../services/projectService';
-import { getEvaluationsByEvaluator, getEvaluationStatus } from '../../services/evaluationService';
+import { getStudentEvaluationData } from '../../services/evaluationService';
 import { formatDate, formatScore } from '../../utils/ratings';
 
 export default function MyEvaluationsPage() {
   const { user } = useAuth();
   const { ratingsShown, ratingsHiddenReason } = useSettings();
-  const { data, loading, error, reload } = useAsync(async () => {
-    const [evaluations, projects, status] = await Promise.all([getEvaluationsByEvaluator(user.id), getProjects(), getEvaluationStatus(user.id)]);
-    return { evaluations: [...evaluations].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt)), projects, status };
-  }, [user.id]);
+  const { data, loading, error, reload } = useAsync(async (force) => {
+    const [evaluationData, projects] = await Promise.all([
+      getStudentEvaluationData(user.id),
+      getProjects({ refresh: force }),
+    ]);
+    return {
+      evaluations: [...evaluationData.evaluations].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt)),
+      projects,
+      status: evaluationData.status,
+    };
+  }, [user.id], `student-evaluations:${user.id}`);
 
   if (loading) return <Loading />;
   if (error) return <ErrorState error={error} onRetry={reload} />;

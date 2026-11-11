@@ -3,9 +3,10 @@ import { groups } from '../data/groups.js';
 import { students } from '../data/students.js';
 import { evaluationCriteria, RATING_SCALE } from '../data/settings.js';
 import { calcOverall } from '../utils/ratings.js';
+import { request } from '../config/apiConfig.js';
 import { checkEligibility } from './evaluationAssignment.js';
 import { getSettings } from './settingsService.js';
-import { delay, load, save } from './mockStore.js';
+import { load, save } from './mockStore.js';
 import { getCurrentUser } from './authService.js';
 import { isAdmin, isFaculty, isStudent } from '../utils/roles.js';
 import { getProjects } from './projectService.js';
@@ -15,7 +16,8 @@ const all = () => {
   if (!Array.isArray(evaluations)) throw new Error('Saved evaluations are invalid. Reset the demo data before continuing.');
   const ids = new Set();
   const evaluatedPairs = new Set();
-  const legacyCriteria = [...evaluationCriteria, { id: 'c5' }];
+  const legacyFourCriteria = ['c1', 'c2', 'c3', 'c4'].map((id) => ({ id }));
+  const legacyFiveCriteria = [...legacyFourCriteria, { id: 'c5' }];
   const valid = evaluations.every((evaluation) => {
     if (!evaluation || typeof evaluation !== 'object'
       || typeof evaluation.id !== 'string'
@@ -32,8 +34,8 @@ const all = () => {
     ids.add(evaluation.id);
     evaluatedPairs.add(pair);
     const criteria = Object.hasOwn(evaluation.ratings, 'c5')
-      ? legacyCriteria
-      : evaluationCriteria;
+      ? legacyFiveCriteria
+      : Object.hasOwn(evaluation.ratings, 'c4') ? legacyFourCriteria : evaluationCriteria;
     return criteria.every((criterion) => {
       const rating = evaluation.ratings[criterion.id];
       return Number.isInteger(rating) && rating >= 1 && rating <= RATING_SCALE;
@@ -60,16 +62,54 @@ function requireDemoAdmin(user) {
 }
 
 export async function getEvaluationsByEvaluator(evaluatorId) {
+  return (await getStudentEvaluationData(evaluatorId)).evaluations;
+}
+
+export async function getStudentEvaluationData(evaluatorId) {
   requireCurrentStudent(evaluatorId);
-  await delay();
-  return all().filter((e) => e.evaluatorId === evaluatorId);
+  const response = await request('getStudentEvaluationData', { authenticated: true });
+  if (!response.data || !Array.isArray(response.data.evaluations)) {
+    throw new Error('Evaluation history response is invalid.');
+  }
+  const evaluations = response.data.evaluations.map((row) => {
+    const ratings = {
+      c1: Number(row.ProposalRating),
+      c2: Number(row.PitchVideoRating),
+      c3: Number(row.PosterRating),
+    };
+    const id = String(row.EvaluationID || '');
+    const studentId = String(row.StudentID || '');
+    const groupCode = String(row.GroupCode || '');
+    const submittedAt = String(row.SubmittedAt || '');
+    if (
+      !id ||
+      !studentId ||
+      studentId !== evaluatorId ||
+      !groupCode ||
+      !Object.values(ratings).every((rating) => Number.isInteger(rating) && rating >= 1 && rating <= RATING_SCALE) ||
+      !Number.isFinite(Date.parse(submittedAt))
+    ) {
+      throw new Error('Evaluation history contains an invalid record.');
+    }
+    return {
+      id,
+      evaluatorId: studentId,
+      evaluatedGroupId: groupCode,
+      ratings,
+      overallScore: calcOverall(ratings),
+      comments: String(row.Comment || ''),
+      submittedAt,
+    };
+  });
+  const status = response.data.status;
+  validateEvaluationStatus(status);
+  return { evaluations, status };
 }
 
 // Raw evaluations received by a group (faculty detail view; includes comments).
 export async function getEvaluationsForGroup(groupId, user) {
   const currentUser = getCurrentUser();
   if (!isFaculty(user) || currentUser?.id !== user.id) throw new Error('Only signed-in faculty can view received evaluation details.');
-  await delay();
   return all()
     .filter((e) => e.evaluatedGroupId === groupId)
     .map((e) => {
@@ -80,7 +120,6 @@ export async function getEvaluationsForGroup(groupId, user) {
 
 // Aggregates only (no comments, no evaluator identity): safe for student-facing views.
 export async function getAggregates() {
-  await delay();
   const map = {};
   all().forEach((e) => {
     const a = (map[e.evaluatedGroupId] ||= { total: 0, count: 0 });
@@ -92,41 +131,52 @@ export async function getAggregates() {
 
 export async function getEligibility(studentId, targetGroupId) {
   const student = requireCurrentStudent(studentId);
-  await delay(50);
-  const projects = await getProjects();
+  const response = await request('getEvaluationEligibility', {
+    authenticated: true,
+    query: { groupCode: targetGroupId },
+  });
+  const eligibility = response.data;
+  if (
+    !eligibility ||
+    typeof eligibility.canEvaluate !== 'boolean' ||
+    typeof eligibility.reason !== 'string' ||
+    typeof eligibility.code !== 'string'
+  ) {
+    throw new Error('Evaluation eligibility response is invalid.');
+  }
+  validateEvaluationStatus({
+    submitted: eligibility.submitted,
+    limit: eligibility.limit,
+    remaining: eligibility.remaining,
+  });
+  if (!eligibility.canEvaluate) return eligibility;
+
   const settings = await getSettings();
-  const existing = all().filter((e) => e.evaluatorId === studentId);
-  return {
-    ...checkEligibility({
+  if (settings.evaluationAssignmentMethod === 'assigned') {
+    const [projects, existing] = await Promise.all([
+      getProjects(),
+      getEvaluationsByEvaluator(studentId),
+    ]);
+    const assignment = checkEligibility({
       student,
       targetGroupId,
       existing,
       allGroups: projects.map((project) => ({ id: project.groupId })),
       settings,
-    }),
-    submitted: existing.length,
-    limit: settings.evaluationLimit,
-    remaining: Math.max(settings.evaluationLimit - existing.length, 0),
-  };
+    });
+    if (!assignment.canEvaluate) return { ...eligibility, ...assignment };
+  }
+  return eligibility;
 }
 
-// Eligibility, ratings, comments, and current session are revalidated on every submit.
+// The backend revalidates eligibility, ratings, comments, and session on every submit.
 export async function submitEvaluation({ evaluatorId, evaluatedGroupId, ratings, comments }) {
-  const student = requireCurrentStudent(evaluatorId);
+  requireCurrentStudent(evaluatorId);
   if (submissionsInProgress.has(evaluatorId)) throw new Error('An evaluation is already being submitted. Please wait.');
   submissionsInProgress.add(evaluatorId);
   try {
-    await delay(300);
-    const projects = await getProjects();
     const settings = await getSettings();
-    const list = all();
-    const check = checkEligibility({
-      student,
-      targetGroupId: evaluatedGroupId,
-      existing: list.filter((e) => e.evaluatorId === evaluatorId),
-      allGroups: projects.map((project) => ({ id: project.groupId })),
-      settings,
-    });
+    const check = await getEligibility(evaluatorId, evaluatedGroupId);
     if (!check.canEvaluate) throw new Error(check.reason);
     if (!ratings || typeof ratings !== 'object' || Array.isArray(ratings)) throw new Error('Please rate every criterion.');
 
@@ -144,18 +194,34 @@ export async function submitEvaluation({ evaluatorId, evaluatedGroupId, ratings,
       throw new Error(`Comments must be ${settings.commentMaxLength} characters or fewer.`);
     }
 
-    const evaluation = {
-      id: `e${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    requireCurrentStudent(evaluatorId);
+    const response = await request('submitEvaluation', {
+      method: 'POST',
+      authenticated: true,
+      body: {
+        groupCode: evaluatedGroupId,
+        proposalRating: savedRatings.c1,
+        pitchVideoRating: savedRatings.c2,
+        posterRating: savedRatings.c3,
+        comment: cleanedComments,
+      },
+    });
+    if (typeof response.evaluationId !== 'string' || !response.evaluationId.trim()) {
+      throw new Error('The server did not confirm the evaluation submission.');
+    }
+    const submittedAt = String(response.submittedAt || '');
+    if (!Number.isFinite(Date.parse(submittedAt))) {
+      throw new Error('The server returned an invalid evaluation submission time.');
+    }
+    return {
+      id: response.evaluationId,
       evaluatorId,
       evaluatedGroupId,
       ratings: savedRatings,
       overallScore: calcOverall(savedRatings, evaluationCriteria),
       comments: cleanedComments,
-      submittedAt: new Date().toISOString(),
+      submittedAt,
     };
-    requireCurrentStudent(evaluatorId);
-    save('evaluations', [...list, evaluation]);
-    return evaluation;
   } finally {
     submissionsInProgress.delete(evaluatorId);
   }
@@ -168,8 +234,20 @@ export function resetEvaluations(user) {
 
 export async function getEvaluationStatus(studentId) {
   requireCurrentStudent(studentId);
-  await delay(50);
-  const settings = await getSettings();
-  const submitted = all().filter((e) => e.evaluatorId === studentId).length;
-  return { submitted, limit: settings.evaluationLimit, remaining: Math.max(settings.evaluationLimit - submitted, 0) };
+  const response = await request('getEvaluationStatus', { authenticated: true });
+  const status = response.data;
+  validateEvaluationStatus(status);
+  return status;
+}
+
+function validateEvaluationStatus(status) {
+  if (
+    !status ||
+    !Number.isInteger(status.submitted) ||
+    status.submitted < 0 ||
+    status.limit !== 5 ||
+    status.remaining !== Math.max(status.limit - status.submitted, 0)
+  ) {
+    throw new Error('Evaluation status response is invalid.');
+  }
 }

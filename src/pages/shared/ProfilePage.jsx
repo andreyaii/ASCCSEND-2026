@@ -2,7 +2,6 @@ import PageHeader from '../../components/PageHeader';
 import { Loading, ErrorState } from '../../components/Feedback';
 import { useAuth } from '../../context/AuthContext';
 import { useAsync } from '../../hooks/useAsync';
-import { getGroupById } from '../../services/groupService';
 import { getProjectByGroupId } from '../../services/projectService';
 import { isStudent } from '../../utils/roles';
 
@@ -13,7 +12,13 @@ const Field = ({ label, children }) => (
 export default function ProfilePage() {
   const { user } = useAuth();
   const student = isStudent(user);
-  const { data, loading, error, reload } = useAsync(async () => (student ? { group: await getGroupById(user.groupId), project: await getProjectByGroupId(user.groupId) } : {}), [user.id]);
+  const { data, loading, error, reload } = useAsync(
+    async (force) => (student ? {
+      project: await getProjectByGroupId(user.groupId, { refresh: force }),
+    } : {}),
+    [user.id],
+    `profile:${user.id}`,
+  );
 
   if (loading) return <Loading />;
   if (error) return <ErrorState error={error} onRetry={reload} />;

@@ -1,6 +1,6 @@
 import { initialSettings, evaluationCriteria } from '../data/settings.js';
 import { getCurrentUser } from './authService.js';
-import { delay, load, save } from './mockStore.js';
+import { load, save } from './mockStore.js';
 import { isAdmin } from '../utils/roles.js';
 
 const isDemoAdmin = (user) =>
@@ -31,7 +31,6 @@ function validateSettings(settings) {
 }
 
 export async function getSettings() {
-  await delay(100);
   return validateSettings(load('settings', initialSettings));
 }
 
@@ -54,7 +53,6 @@ export const setResultsPublished = (user, published) => {
 };
 
 export async function getEvaluationCriteria() {
-  await delay(50);
   return evaluationCriteria;
 }
 

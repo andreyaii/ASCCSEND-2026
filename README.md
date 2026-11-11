@@ -1,8 +1,8 @@
 # TechCon: Project Showcase and Evaluation System
 
-## Local demo
+## App overview
 
-The current application is a React/Vite demonstration backed by seeded records and browser `localStorage`. It has no connected backend. Stored data is local to one browser profile and is not shared across users or devices. The mock login, shared password, and in-memory demo token are not secure authentication and must not be used for production.
+The application is a React/Vite app. Authentication and project listing use the Google Apps Script endpoint configured in `src/config/apiConfig.js`. Student evaluation eligibility, submission, history, and status also use that backend; remaining demo settings, aggregates, and some faculty views still use seeded records and browser `localStorage`.
 
 Install the existing dependencies and start the app:
 
@@ -18,10 +18,12 @@ npm run build
 npm test
 ```
 
-Demo accounts are listed on the login screen. Their shared password is `techcon123`; these are mock accounts, not production credentials. In development mode, the administrator account can access the demo publication and reset controls. Results publication and rating visibility change display settings only and do not delete evaluation records.
+The administrator publication and reset controls are development-only demo features. Results publication and rating visibility change display settings only and do not delete evaluation records.
 
-## Backend integration still required
+## Evaluation API
 
-`src/config/apiConfig.js` is configured with the deployed Google Apps Script URL as its default API base; set `VITE_API_URL` to override it. The request helper is available, but the application services currently use local demo data and do not call it. Connecting the app's real flows requires defining and implementing the Apps Script operations and response contracts for authentication/session lifecycle, projects/groups/users, evaluation eligibility and assignment, evaluation submission/history/aggregates, and settings. The backend must enforce authentication, role authorization, self-evaluation and duplicate prevention, evaluation limits, rating/comment validation, privacy, and publication/visibility rules. It also needs persistent storage, secret/token handling, and appropriate audit and error handling.
+The student login operation issues a six-hour session token stored in Apps Script cache. Authenticated evaluation operations use that token; the backend looks up the student from the session and does not accept a submitted student ID as identity. Submission rules are checked on the server, and a script lock protects duplicate and five-evaluation-limit checks while writing.
 
-Evaluations rate the project logo, documentation, pitch video, and poster using an equal-weight average. The demo retains the free-selection strategy and five-evaluation limit; instructor/project-owner confirmation is needed before changing those rules or defining real assigned evaluations.
+The existing `Evaluations` tab must have these columns in order: `EvaluationID, StudentID, GroupCode, ProposalRating, PitchVideoRating, PosterRating, Comment, SubmittedAt`. Ratings are Proposal, Pitch Video, and Poster (1–5); the sheet schema is not modified by the app. After changing `google-apps-script/Code.gs`, redeploy the Apps Script web app so the endpoint runs the updated backend.
+
+The default API base URL can be overridden with `VITE_API_URL`. Remaining backend integration includes moving demo settings, aggregates, and faculty evaluation views to the API, plus production deployment and operational monitoring.

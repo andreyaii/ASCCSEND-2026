@@ -58,8 +58,8 @@ function testSpreadsheetConnection() {
 // 2. PUBLIC GROUPS
 // =====================================================
 
-function getPublicGroups() {
-  const spreadsheet = getSpreadsheet();
+function getPublicGroups(spreadsheet) {
+  spreadsheet = spreadsheet || getSpreadsheet();
   const sheet = getRequiredSheet(spreadsheet, "Groups");
   const data = sheet.getDataRange().getValues();
 
@@ -71,12 +71,41 @@ function getPublicGroups() {
   });
   const groupCodeIndex = headers.indexOf("GroupCode");
   const linkColumns = {};
+  const resourceHeaders = ["ProposalLink", "PitchVideoLink", "PosterLink"];
+  const resourceIndexes = resourceHeaders.map(function(header) {
+    return headers.indexOf(header);
+  }).filter(function(columnIndex) {
+    return columnIndex >= 0;
+  });
+  let resourceRichText = [];
+  let resourceFormulas = [];
+  let resourceStartColumn = 0;
 
-  ["ProposalLink", "PitchVideoLink", "PosterLink"].forEach(function(header) {
+  if (resourceIndexes.length > 0) {
+    resourceStartColumn = Math.min.apply(null, resourceIndexes);
+    const resourceEndColumn = Math.max.apply(null, resourceIndexes);
+    const resourceRange = sheet.getRange(
+      2,
+      resourceStartColumn + 1,
+      data.length - 1,
+      resourceEndColumn - resourceStartColumn + 1
+    );
+    resourceRichText = resourceRange.getRichTextValues();
+    resourceFormulas = resourceRange.getFormulas();
+  }
+
+  resourceHeaders.forEach(function(header) {
     const columnIndex = headers.indexOf(header);
     linkColumns[header] = columnIndex < 0
       ? []
-      : getSheetResourceLinks(sheet, columnIndex + 1, data.length - 1);
+      : getSheetResourceLinks(
+        resourceRichText,
+        resourceFormulas,
+        columnIndex - resourceStartColumn,
+        data.slice(1).map(function(row) {
+          return row[columnIndex];
+        })
+      );
   });
 
   return data.slice(1)
@@ -177,16 +206,9 @@ function normalizeGroupCode(value) {
   return String(value || "").trim().replace(/\s+/g, "").toUpperCase();
 }
 
-function getSheetResourceLinks(sheet, column, rowCount) {
-  if (rowCount <= 0) return [];
-
-  const range = sheet.getRange(2, column, rowCount, 1);
-  const richTextValues = range.getRichTextValues();
-  const formulas = range.getFormulas();
-  const values = range.getValues();
-
-  return values.map(function(row, index) {
-    const richText = richTextValues[index][0];
+function getSheetResourceLinks(richTextValues, formulas, columnIndex, values) {
+  return values.map(function(value, index) {
+    const richText = richTextValues[index][columnIndex];
     const directLink = richText && richText.getLinkUrl();
     if (directLink) return directLink;
 
@@ -201,11 +223,11 @@ function getSheetResourceLinks(sheet, column, rowCount) {
       if (runLinks.length === 1) return runLinks[0];
     }
 
-    const formula = formulas[index][0];
+    const formula = formulas[index][columnIndex];
     const formulaMatch = formula && formula.match(/^\s*=\s*HYPERLINK\s*\(\s*"((?:[^"]|"")*)"/i);
     if (formulaMatch) return formulaMatch[1].replace(/""/g, '"');
 
-    return String(row[0] || "").trim();
+    return String(value || "").trim();
   });
 }
 
@@ -222,11 +244,66 @@ function doGet(e) {
 
     const spreadsheet = getSpreadsheet();
 
+    if (
+      action === "getMyEvaluations" ||
+      action === "getEvaluations" ||
+      action === "getStudentEvaluationData" ||
+      action === "getEvaluationStatus" ||
+      action === "getEvaluationEligibility"
+    ) {
+      const student = getAuthenticatedStudent(
+        spreadsheet,
+        e.parameter.sessionToken
+      );
+      const evaluations = getEvaluationRows(
+        getRequiredSheet(spreadsheet, "Evaluations")
+      ).filter(function(evaluation) {
+        return String(evaluation.StudentID || "").trim() === student.studentId;
+      });
+      const groups = action === "getEvaluationEligibility"
+        ? getGroupCodes(spreadsheet)
+        : null;
+
+      if (action === "getStudentEvaluationData") {
+        return responseJSON({
+          success: true,
+          data: {
+            evaluations: evaluations,
+            status: getEvaluationStatusData(evaluations.length)
+          }
+        });
+      }
+
+      if (action === "getMyEvaluations" || action === "getEvaluations") {
+        return responseJSON({
+          success: true,
+          data: evaluations
+        });
+      }
+
+      if (action === "getEvaluationStatus") {
+        return responseJSON({
+          success: true,
+          data: getEvaluationStatusData(evaluations.length)
+        });
+      }
+
+      return responseJSON({
+        success: true,
+        data: getEvaluationEligibility(
+          student,
+          e.parameter.groupCode,
+          evaluations,
+          groups
+        )
+      });
+    }
+
     // GET GROUPS / PROJECTS
     if (action === "getGroups" || action === "getProjects") {
       return responseJSON({
         success: true,
-        data: getPublicGroups()
+        data: getPublicGroups(spreadsheet)
       });
     }
 
@@ -251,19 +328,6 @@ function doGet(e) {
       return responseJSON({
         success: true,
         data: settings
-      });
-    }
-
-    // GET EVALUATIONS
-    if (action === "getEvaluations") {
-      const sheet = getRequiredSheet(
-        spreadsheet,
-        "Evaluations"
-      );
-
-      return responseJSON({
-        success: true,
-        data: getSheetData(sheet)
       });
     }
 
@@ -417,16 +481,20 @@ function doPost(e) {
       }
 
       // STUDENT USER RESPONSE
+      const studentId = String(getStudentField(user, [
+        "student no.",
+        "student number",
+        "student id",
+        "member #",
+        "member number"
+      ]) || "").trim();
+      const sessionToken = createStudentSession(studentId);
+
       return responseJSON({
         success: true,
+        sessionToken: sessionToken,
         user: {
-          StudentID: getStudentField(user, [
-            "student no.",
-            "student number",
-            "student id",
-            "member #",
-            "member number"
-          ]),
+          StudentID: studentId,
           StudentNo: getStudentField(user, [
             "student no.",
             "student number",
@@ -459,55 +527,74 @@ function doPost(e) {
         spreadsheet,
         "Evaluations"
       );
+      const lock = LockService.getScriptLock();
+      lock.waitLock(10000);
 
-      const studentId = String(
-        payload.studentId || ""
-      ).trim();
+      try {
+        const student = getAuthenticatedStudent(
+          spreadsheet,
+          payload.sessionToken
+        );
+        const requestedGroupCode = String(payload.groupCode || "").trim();
+        if (!requestedGroupCode) {
+          throw new Error("Group Code is required.");
+        }
 
-      const groupCode = String(
-        payload.groupCode || ""
-      ).trim();
+        const proposalRating = validateRating(payload.proposalRating);
+        const pitchVideoRating = validateRating(payload.pitchVideoRating);
+        const posterRating = validateRating(payload.posterRating);
+        const comment = payload.comment === undefined ? "" : payload.comment;
+        if (typeof comment !== "string") {
+          throw new Error("Comment must be text.");
+        }
+        if (comment.trim().length > 500) {
+          throw new Error("Comment must be 500 characters or fewer.");
+        }
 
-      if (!studentId || !groupCode) {
-        throw new Error("Student ID and Group Code are required.");
+        const groupCode = getGroupCodes(spreadsheet).find(function(candidate) {
+          return normalizeGroupCode(candidate) === normalizeGroupCode(requestedGroupCode);
+        });
+        if (!groupCode) {
+          throw new Error("This project group could not be found.");
+        }
+        if (normalizeGroupCode(student.groupCode) === normalizeGroupCode(groupCode)) {
+          throw new Error("You cannot evaluate your own group.");
+        }
+
+        const evaluations = getEvaluationRows(evalSheet);
+        const mine = evaluations.filter(function(evaluation) {
+          return String(evaluation.StudentID || "").trim() === student.studentId;
+        });
+        if (mine.some(function(evaluation) {
+          return normalizeGroupCode(evaluation.GroupCode) === normalizeGroupCode(groupCode);
+        })) {
+          throw new Error("You have already evaluated this group.");
+        }
+        if (mine.length >= 5) {
+          throw new Error("You have reached the limit of 5 evaluations.");
+        }
+
+        const evaluationId = "EV-" + Utilities.getUuid();
+        const submittedAt = new Date().toISOString();
+        evalSheet.appendRow([
+          evaluationId,
+          student.studentId,
+          groupCode,
+          proposalRating,
+          pitchVideoRating,
+          posterRating,
+          comment.trim(),
+          submittedAt
+        ]);
+
+        return responseJSON({
+          success: true,
+          evaluationId: evaluationId,
+          submittedAt: submittedAt
+        });
+      } finally {
+        lock.releaseLock();
       }
-
-      const proposalRating = payload.proposalRating;
-      const pitchVideoRating = payload.pitchVideoRating;
-
-      // Accept both names for compatibility with the
-      // existing frontend. Store the value under PosterRating.
-      const posterRating = payload.posterRating !== undefined
-        ? payload.posterRating
-        : payload.documentationRating;
-
-      if (
-        proposalRating === undefined ||
-        pitchVideoRating === undefined ||
-        posterRating === undefined
-      ) {
-        throw new Error("All evaluation ratings are required.");
-      }
-
-      const evaluationId =
-        "EV-" + new Date().getTime();
-
-      // Column order follows the Evaluations sheet exactly.
-      evalSheet.appendRow([
-        evaluationId,
-        studentId,
-        groupCode,
-        proposalRating,
-        pitchVideoRating,
-        posterRating,
-        payload.comment || "",
-        new Date().toISOString()
-      ]);
-
-      return responseJSON({
-        success: true,
-        evaluationId: evaluationId
-      });
     }
 
 
@@ -580,6 +667,166 @@ function doPost(e) {
 // =====================================================
 // 5. HELPER FUNCTIONS
 // =====================================================
+
+const EVALUATION_HEADERS = [
+  "EvaluationID",
+  "StudentID",
+  "GroupCode",
+  "ProposalRating",
+  "PitchVideoRating",
+  "PosterRating",
+  "Comment",
+  "SubmittedAt"
+];
+
+function createStudentSession(studentId) {
+  if (!studentId) {
+    throw new Error("The authenticated student does not have a StudentID.");
+  }
+  const sessionToken = Utilities.getUuid();
+  CacheService.getScriptCache().put(
+    "student-session:" + sessionToken,
+    JSON.stringify({ studentId: studentId }),
+    21600
+  );
+  return sessionToken;
+}
+
+function getAuthenticatedStudent(spreadsheet, sessionToken) {
+  const token = String(sessionToken || "").trim();
+  if (!token) {
+    throw new Error("A valid student session is required. Please sign in again.");
+  }
+
+  const sessionData = CacheService.getScriptCache().get(
+    "student-session:" + token
+  );
+  if (!sessionData) {
+    throw new Error("Your student session has expired. Please sign in again.");
+  }
+
+  let session;
+  try {
+    session = JSON.parse(sessionData);
+  } catch (error) {
+    throw new Error("Your student session is invalid. Please sign in again.");
+  }
+
+  const students = getSheetData(getRequiredSheet(spreadsheet, "Students"));
+  const student = students.find(function(record) {
+    const id = String(getStudentField(record, [
+      "student no.",
+      "student number",
+      "student id",
+      "member #",
+      "member number"
+    ]) || "").trim();
+    return id === session.studentId;
+  });
+  if (!student) {
+    throw new Error("The student account for this session could not be found.");
+  }
+
+  return {
+    studentId: String(getStudentField(student, [
+      "student no.",
+      "student number",
+      "student id",
+      "member #",
+      "member number"
+    ]) || "").trim(),
+    groupCode: String(getStudentField(student, [
+      "group code",
+      "groupcode"
+    ]) || "").trim()
+  };
+}
+
+function getEvaluationRows(sheet) {
+  const lastColumn = sheet.getLastColumn();
+  const headers = lastColumn > 0
+    ? sheet.getRange(1, 1, 1, lastColumn).getDisplayValues()[0].map(function(header) {
+      return String(header).trim();
+    })
+    : [];
+  if (
+    headers.length !== EVALUATION_HEADERS.length ||
+    !EVALUATION_HEADERS.every(function(header, index) {
+      return headers[index] === header;
+    })
+  ) {
+    throw new Error(
+      "The Evaluations sheet must use the existing columns in this order: " +
+      EVALUATION_HEADERS.join(", ")
+    );
+  }
+  return getSheetData(sheet);
+}
+
+function validateRating(value) {
+  if (
+    typeof value !== "number" ||
+    !isFinite(value) ||
+    Math.floor(value) !== value ||
+    value < 1 ||
+    value > 5
+  ) {
+    throw new Error("Ratings must be whole numbers from 1 to 5.");
+  }
+  return value;
+}
+
+function getEvaluationEligibility(student, groupCode, evaluations, groups) {
+  const requestedGroupCode = normalizeGroupCode(groupCode);
+  const foundGroup = groups.some(function(candidate) {
+    return normalizeGroupCode(candidate) === requestedGroupCode;
+  });
+  const submitted = evaluations.length;
+  const existing = evaluations.some(function(evaluation) {
+    return normalizeGroupCode(evaluation.GroupCode) === requestedGroupCode;
+  });
+
+  let reason = "";
+  let code = "ok";
+  if (!foundGroup) {
+    code = "missing-group";
+    reason = "This project group could not be found.";
+  } else if (normalizeGroupCode(student.groupCode) === requestedGroupCode) {
+    code = "own-group";
+    reason = "You cannot evaluate your own group.";
+  } else if (existing) {
+    code = "duplicate";
+    reason = "You have already evaluated this group.";
+  } else if (submitted >= 5) {
+    code = "limit";
+    reason = "You have reached the limit of 5 evaluations.";
+  }
+
+  return {
+    canEvaluate: code === "ok",
+    code: code,
+    reason: reason,
+    ...getEvaluationStatusData(submitted)
+  };
+}
+
+function getGroupCodes(spreadsheet) {
+  return getSheetData(getRequiredSheet(spreadsheet, "Groups"))
+    .map(function(group) {
+      return String(getStudentField(group, ["group code", "groupcode"]) || "").trim();
+    })
+    .filter(function(groupCode) {
+      return Boolean(normalizeGroupCode(groupCode));
+    });
+}
+
+function getEvaluationStatusData(submitted) {
+  return {
+    submitted: submitted,
+    limit: 5,
+    remaining: Math.max(5 - submitted, 0)
+  };
+}
 
 
 // Get spreadsheet using Script Properties.

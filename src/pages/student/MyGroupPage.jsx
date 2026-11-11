@@ -11,15 +11,16 @@ import { Link } from 'react-router-dom';
 export default function MyGroupPage() {
   const { user } = useAuth();
   const { data, loading, error, reload } = useAsync(
-    async () => {
+    async (force) => {
       const [project, aggregates, status] = await Promise.all([
-        getProjectByGroupId(user.groupId),
+        getProjectByGroupId(user.groupId, { refresh: force }),
         getAggregates(),
         getEvaluationStatus(user.id),
       ]);
       return { project, aggregates, status };
     },
-    [user.groupId, user.id]
+    [user.groupId, user.id],
+    `student-my-group:${user.id}:${user.groupId}`,
   );
 
   if (loading) return <Loading />;

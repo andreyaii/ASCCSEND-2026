@@ -10,11 +10,11 @@ import { getAggregates } from '../../services/evaluationService';
 
 export default function MyTeamsPage() {
   const { user } = useAuth();
-  const { data, loading, error, reload } = useAsync(async () => {
+  const { data, loading, error, reload } = useAsync(async (force) => {
     const groupIds = await getAssignedGroupIds(user.id);
-    const [projects, aggregates] = await Promise.all([getProjects({ groupIds }), getAggregates()]);
+    const [projects, aggregates] = await Promise.all([getProjects({ groupIds, refresh: force }), getAggregates()]);
     return { projects, aggregates };
-  }, [user.id]);
+  }, [user.id], `faculty-my-teams:${user.id}`);
 
   if (loading) return <Loading />;
   if (error) return <ErrorState error={error} onRetry={reload} />;
