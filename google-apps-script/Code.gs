@@ -570,12 +570,13 @@ function doPost(e) {
         })) {
           throw new Error("You have already evaluated this group.");
         }
-        if (mine.length >= 5) {
-          throw new Error("You have reached the limit of 5 evaluations.");
-        }
+       const evaluationId = generateEvaluationId(evalSheet);
 
-        const evaluationId = "EV-" + Utilities.getUuid();
-        const submittedAt = new Date().toISOString();
+        const submittedAt = Utilities.formatDate(
+          new Date(),
+          "Asia/Manila",
+          "yyyy-MM-dd HH:mm:ss"
+        );
         evalSheet.appendRow([
           evaluationId,
           student.studentId,
@@ -797,9 +798,6 @@ function getEvaluationEligibility(student, groupCode, evaluations, groups) {
   } else if (existing) {
     code = "duplicate";
     reason = "You have already evaluated this group.";
-  } else if (submitted >= 5) {
-    code = "limit";
-    reason = "You have reached the limit of 5 evaluations.";
   }
 
   return {
@@ -822,9 +820,7 @@ function getGroupCodes(spreadsheet) {
 
 function getEvaluationStatusData(submitted) {
   return {
-    submitted: submitted,
-    limit: 5,
-    remaining: Math.max(5 - submitted, 0)
+    submitted: submitted
   };
 }
 
@@ -905,4 +901,36 @@ function responseJSON(data) {
   return ContentService
     .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
+}
+// evaluation id generation
+function generateEvaluationId(sheet) {
+  const lastRow = sheet.getLastRow();
+
+  // First evaluation
+  if (lastRow <= 1) {
+    return "EV-0001";
+  }
+
+  const existingIds = sheet
+    .getRange(2, 1, lastRow - 1, 1)
+    .getDisplayValues()
+    .flat();
+
+  let highestNumber = 0;
+
+  existingIds.forEach(function(id) {
+    const match = String(id).trim().match(/^EV-(\d+)$/);
+
+    if (match) {
+      const number = Number(match[1]);
+
+      if (number > highestNumber) {
+        highestNumber = number;
+      }
+    }
+  });
+
+  const nextNumber = highestNumber + 1;
+
+  return "EV-" + String(nextNumber).padStart(4, "0");
 }

@@ -32,7 +32,11 @@ export default function ExplorePage() {
 
   return (
     <>
-      <PageHeader title="Explore Projects" subtitle="Browse projects from other groups and evaluate up to the allowed limit." />
+      <PageHeader title="Explore Projects" subtitle="Browse projects from other groups and share your feedback." />
+      <div className="mb-5 rounded-card border border-emerald-200 bg-emerald-50 px-4 py-3.5 text-sm text-ink">
+        <p className="font-semibold text-emerald-800">How to evaluate projects</p>
+        <p className="mt-1 leading-6">Choose any project from another group, review its proposal, pitch video, and poster, then submit your evaluation. You can evaluate as many projects as you like, but each project can only be evaluated once.</p>
+      </div>
       <div className="mb-5"><EvaluationCounter status={data.status} /></div>
       <ProjectBrowser projects={data.projects} aggregates={data.aggregates}
         linkFor={(p) => `/student/projects/${p.id}`}

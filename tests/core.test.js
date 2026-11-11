@@ -51,12 +51,12 @@ beforeEach(() => {
         success: true,
         data: {
           evaluations: mine,
-          status: { submitted: mine.length, limit: 5, remaining: Math.max(5 - mine.length, 0) },
+          status: { submitted: mine.length },
         },
       });
     }
     if (action === 'getEvaluationStatus') {
-      return response({ success: true, data: { submitted: mine.length, limit: 5, remaining: 5 - mine.length } });
+      return response({ success: true, data: { submitted: mine.length } });
     }
     if (action === 'getEvaluationEligibility') {
       const groupCode = requestUrl.searchParams.get('groupCode');
@@ -66,16 +66,15 @@ beforeEach(() => {
         ? 'missing-group'
         : ownGroup ? 'own-group'
           : duplicate ? 'duplicate'
-            : mine.length >= 5 ? 'limit' : 'ok';
+            : 'ok';
       const reasons = {
         'missing-group': 'This project group could not be found.',
         'own-group': 'You cannot evaluate your own group.',
         duplicate: 'You have already evaluated this group.',
-        limit: 'You have reached the limit of 5 evaluations.',
       };
       return response({
         success: true,
-        data: { canEvaluate: code === 'ok', code, reason: reasons[code] || '', submitted: mine.length, limit: 5, remaining: Math.max(5 - mine.length, 0) },
+        data: { canEvaluate: code === 'ok', code, reason: reasons[code] || '', submitted: mine.length },
       });
     }
     if (action === 'submitEvaluation') {
@@ -152,10 +151,21 @@ test('evaluation history and status share one authenticated API request', async 
     Comment: '',
     SubmittedAt: '2026-11-10T00:00:00.000Z',
   });
+  apiEvaluations.push({
+    EvaluationID: 'EV-new-format',
+    StudentID: 's1',
+    GroupCode: 'g3',
+    ProposalRating: 4,
+    PitchVideoRating: 4,
+    PosterRating: 4,
+    Comment: '',
+    SubmittedAt: '2026-11-11 12:30:45',
+  });
 
   const { evaluations: mine, status } = await getStudentEvaluationData('s1');
   assert.equal(mine[0].overallScore, 4);
-  assert.deepEqual(status, { submitted: 1, limit: 5, remaining: 4 });
+  assert.equal(mine[1].submittedAt, '2026-11-11 12:30:45');
+  assert.deepEqual(status, { submitted: 2 });
   assert.equal(requestCounts.get('getStudentEvaluationData'), 1);
 });
 
@@ -191,7 +201,7 @@ test('identical concurrent API reads share one in-flight request without caching
   assert.equal(requestCounts.get('getEvaluationStatus'), 2);
 });
 
-test('eligibility blocks self, duplicate, missing, and over-limit groups', async () => {
+test('eligibility blocks self, duplicate, and missing groups', async () => {
   await assert.rejects(
     submitEvaluation({ evaluatorId: 's1', evaluatedGroupId: 'g1', ratings: validRatings }),
     /own group/,
@@ -228,10 +238,10 @@ test('eligibility blocks self, duplicate, missing, and over-limit groups', async
       SubmittedAt: new Date().toISOString(),
     });
   }
-  await assert.rejects(
-    submitEvaluation({ evaluatorId: 's1', evaluatedGroupId: 'g7', ratings: validRatings }),
-    /limit of 5/,
-  );
+  apiGroups.push({ groupCode: 'g7', title: 'Additional project', tag: 'Test' });
+  assert.equal((await getEligibility('s1', 'g7')).canEvaluate, true);
+  await submitEvaluation({ evaluatorId: 's1', evaluatedGroupId: 'g7', ratings: validRatings });
+  assert.equal((await getEvaluationStatus('s1')).submitted, 6);
 });
 
 test('submission validates ratings and comment length before calling the API', async () => {

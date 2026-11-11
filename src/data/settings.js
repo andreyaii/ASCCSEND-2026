@@ -2,7 +2,6 @@ export const initialSettings = {
   ratingsVisible: true, // global switch, Admin only
   resultsPublished: false, // students see ratings only after publication
   evaluationAssignmentMethod: 'free-select', // 'free-select' | 'assigned' (pending instructor decision)
-  evaluationLimit: 5,
   commentMaxLength: 500,
 };
 

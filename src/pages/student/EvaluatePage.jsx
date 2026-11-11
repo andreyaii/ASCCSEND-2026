@@ -152,7 +152,7 @@ export default function EvaluatePage() {
 
       <ConfirmDialog open={confirming} busy={busy} onCancel={() => setConfirming(false)} onConfirm={submit}
         title="Submit evaluation?" confirmLabel="Submit Evaluation"
-        message={`Your evaluation of ${project.group.groupName} counts toward your limit of ${status.limit} and cannot be edited or resubmitted.`} />
+        message={`Your evaluation of ${project.group.groupName} cannot be edited or resubmitted.`} />
     </div>
   );
 }

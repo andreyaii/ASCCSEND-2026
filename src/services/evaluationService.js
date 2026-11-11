@@ -46,6 +46,33 @@ const all = () => {
 };
 const submissionsInProgress = new Set();
 
+function isValidSubmittedAt(value) {
+  const submittedAt = String(value || '');
+  const match = submittedAt.match(
+    /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/
+  );
+
+  if (match) {
+    const [, yearText, monthText, dayText, hourText, minuteText, secondText] = match;
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const day = Number(dayText);
+    const hour = Number(hourText);
+    const minute = Number(minuteText);
+    const second = Number(secondText);
+    const date = new Date(year, month - 1, day, hour, minute, second);
+
+    return date.getFullYear() === year &&
+      date.getMonth() === month - 1 &&
+      date.getDate() === day &&
+      date.getHours() === hour &&
+      date.getMinutes() === minute &&
+      date.getSeconds() === second;
+  }
+
+  return Number.isFinite(Date.parse(submittedAt));
+}
+
 function requireCurrentStudent(studentId) {
   const currentUser = getCurrentUser();
   if (!currentUser || currentUser.id !== studentId || !isStudent(currentUser)) {
@@ -87,7 +114,7 @@ export async function getStudentEvaluationData(evaluatorId) {
       studentId !== evaluatorId ||
       !groupCode ||
       !Object.values(ratings).every((rating) => Number.isInteger(rating) && rating >= 1 && rating <= RATING_SCALE) ||
-      !Number.isFinite(Date.parse(submittedAt))
+      !isValidSubmittedAt(submittedAt)
     ) {
       throw new Error('Evaluation history contains an invalid record.');
     }
@@ -210,7 +237,7 @@ export async function submitEvaluation({ evaluatorId, evaluatedGroupId, ratings,
       throw new Error('The server did not confirm the evaluation submission.');
     }
     const submittedAt = String(response.submittedAt || '');
-    if (!Number.isFinite(Date.parse(submittedAt))) {
+    if (!isValidSubmittedAt(submittedAt)) {
       throw new Error('The server returned an invalid evaluation submission time.');
     }
     return {
@@ -244,9 +271,7 @@ function validateEvaluationStatus(status) {
   if (
     !status ||
     !Number.isInteger(status.submitted) ||
-    status.submitted < 0 ||
-    status.limit !== 5 ||
-    status.remaining !== Math.max(status.limit - status.submitted, 0)
+    status.submitted < 0
   ) {
     throw new Error('Evaluation status response is invalid.');
   }

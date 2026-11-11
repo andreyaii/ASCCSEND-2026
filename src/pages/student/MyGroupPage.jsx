@@ -32,9 +32,9 @@ export default function MyGroupPage() {
       <section className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-card border border-emerald-200 bg-emerald-50 px-4 py-3">
         <div>
           <p className="text-sm font-semibold text-ink">Evaluation progress</p>
-          <p className="mt-0.5 text-xs text-muted">Evaluate projects from other groups. Your group is excluded.</p>
+          <p className="mt-0.5 text-xs text-muted">Evaluate as many projects from other groups as you like. Your group is excluded.</p>
         </div>
-        <p className="text-sm font-semibold text-emerald-800">{data.status.submitted} of {data.status.limit} submitted <span className="ml-1 font-normal text-muted">· {data.status.remaining} remaining</span></p>
+        <p className="text-sm font-semibold text-emerald-800">{data.status.submitted} evaluation(s) submitted</p>
       </section>
       <h2 className="mb-3 text-lg font-bold">Your project</h2>
       {data.project

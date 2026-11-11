@@ -21,9 +21,6 @@ function validateSettings(settings) {
   if (!['free-select', 'assigned'].includes(value.evaluationAssignmentMethod)) {
     throw new Error('The evaluation assignment method is invalid.');
   }
-  if (!Number.isInteger(value.evaluationLimit) || value.evaluationLimit < 1) {
-    throw new Error('The evaluation limit must be a positive whole number.');
-  }
   if (!Number.isInteger(value.commentMaxLength) || value.commentMaxLength < 0) {
     throw new Error('The comment length limit must be a non-negative whole number.');
   }

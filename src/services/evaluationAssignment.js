@@ -24,7 +24,6 @@ export function checkEligibility({ student, targetGroupId, existing, allGroups, 
   if (!allGroups.some((group) => group.id === targetGroupId)) return { canEvaluate: false, code: 'missing-group', reason: 'This project group could not be found.' };
   if (student.groupId === targetGroupId) return { canEvaluate: false, code: 'own-group', reason: 'You cannot evaluate your own group.' };
   if (existing.some((e) => e.evaluatedGroupId === targetGroupId)) return { canEvaluate: false, code: 'duplicate', reason: 'You have already evaluated this group.' };
-  if (existing.length >= settings.evaluationLimit) return { canEvaluate: false, code: 'limit', reason: `You have reached the limit of ${settings.evaluationLimit} evaluations.` };
   if (!getEligibleGroupIds(student, allGroups, settings).includes(targetGroupId)) {
     const reason = settings.evaluationAssignmentMethod === 'assigned'
       ? 'No assignment for this group is configured for you. Contact your instructor.'
