@@ -3,7 +3,7 @@ import { beforeEach, test } from 'node:test';
 import { initialSettings, evaluationCriteria } from '../src/data/settings.js';
 import { checkEligibility } from '../src/services/evaluationAssignment.js';
 import { getAggregates, getEligibility, getEvaluationStatus, getStudentEvaluationData, submitEvaluation } from '../src/services/evaluationService.js';
-import { getProjects } from '../src/services/projectService.js';
+import { deleteProjectThumbnail, getProjects } from '../src/services/projectService.js';
 import { load, save } from '../src/services/mockStore.js';
 import { students } from '../src/data/students.js';
 import { groups } from '../src/data/groups.js';
@@ -46,6 +46,10 @@ beforeEach(() => {
     const mine = apiEvaluations.filter((evaluation) => evaluation.StudentID === currentStudent.id);
 
     if (action === 'getProjects') return response({ success: true, data: apiGroups });
+    if (action === 'deleteThumbnail') {
+      assert.equal(payload.sessionToken, 'test-session');
+      return response({ success: true, thumbnail: null });
+    }
     if (action === 'getStudentEvaluationData') {
       return response({
         success: true,
@@ -178,6 +182,22 @@ test('concurrent project loads share a single request and cache the result', asy
   assert.equal(first.length, second.length);
   await getProjects();
   assert.equal(requestCounts.get('getProjects'), 1);
+});
+
+test('project thumbnails are exposed using the image URL consumed by project views', async () => {
+  const thumbnail = 'https://drive.google.com/thumbnail?id=drive-file&sz=w1200';
+  apiGroups = [{ groupCode: 'g2', title: 'Project with thumbnail', thumbnail }];
+
+  const [project] = await getProjects({ refresh: true });
+
+  assert.equal(project.thumbnail, thumbnail);
+  assert.equal(project.imageUrl, thumbnail);
+});
+
+test('thumbnail deletion uses the authenticated API action', async () => {
+  await deleteProjectThumbnail();
+
+  assert.equal(requestCounts.get('deleteThumbnail'), 1);
 });
 
 test('forced project refresh bypasses the cached project response', async () => {

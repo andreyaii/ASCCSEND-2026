@@ -78,6 +78,18 @@ html[data-theme='dark'] .btn-secondary:hover:not(:disabled) {
   color: #ff743d;
 }
 
+html[data-theme='dark'] .btn-danger-soft {
+  border-color: #7f3030;
+  background-color: #2a1515;
+  color: #fca5a5;
+}
+
+html[data-theme='dark'] .btn-danger-soft:hover:not(:disabled) {
+  border-color: #a34444;
+  background-color: #351919;
+  color: #fecaca;
+}
+
 html[data-theme='dark'] .bg-primary-light {
   background-color: rgb(var(--color-primary-light));
 }
@@ -172,6 +184,7 @@ html[data-theme='dark'] :focus-visible {
   .btn-primary { @apply btn bg-primary text-white hover:bg-primary-dark active:bg-primary-dark; }
   .btn-secondary { @apply btn border border-line bg-white text-ink hover:border-primary/40 hover:bg-primary-light hover:text-primary; }
   .btn-danger { @apply btn bg-red-700 text-white hover:bg-red-800; }
+  .btn-danger-soft { @apply btn border border-red-200 bg-red-50 text-red-700 hover:border-red-300 hover:bg-red-100 hover:text-red-800; }
   .form-input { @apply min-h-10 w-full rounded-lg border border-line bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-muted focus:border-primary focus:ring-4 focus:ring-primary/10; }
   .form-label { @apply mb-1.5 block text-sm font-semibold text-ink; }
   .badge { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold; }

@@ -646,6 +646,214 @@ function doPost(e) {
 
 
     // -------------------------------------------------
+    // D. UPLOAD PROJECT THUMBNAIL
+    // -------------------------------------------------
+
+    if (action === "uploadThumbnail") {
+      const lock = LockService.getScriptLock();
+      lock.waitLock(10000);
+
+      try {
+        // Authenticate the student.
+        // Never trust a group code supplied by the frontend.
+        const student = getAuthenticatedStudent(
+          spreadsheet,
+          payload.sessionToken
+        );
+
+        const groupCode = normalizeGroupCode(student.groupCode);
+
+        if (!groupCode) {
+          throw new Error("You are not currently assigned to a group.");
+        }
+
+        // Validate the image data.
+        const imageData = String(payload.imageData || "");
+
+        const match = imageData.match(
+          /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/
+        );
+
+        if (!match) {
+          throw new Error("Please upload a valid JPG, PNG, or WebP image.");
+        }
+
+        const mimeType = match[1];
+        const base64Data = match[2];
+        const imageBytes = Utilities.base64Decode(base64Data);
+
+        // Limit uploads to 2 MB.
+        if (imageBytes.length > 2 * 1024 * 1024) {
+          throw new Error("Image size must not exceed 2 MB.");
+        }
+
+        // Get the dedicated Google Drive folder.
+        const folderId = PropertiesService
+          .getScriptProperties()
+          .getProperty("THUMBNAIL_FOLDER_ID");
+
+        if (!folderId) {
+          throw new Error("THUMBNAIL_FOLDER_ID is missing from Script Properties.");
+        }
+
+        const folder = DriveApp.getFolderById(folderId);
+
+        const extension = {
+          "image/jpeg": "jpg",
+          "image/png": "png",
+          "image/webp": "webp"
+        }[mimeType];
+
+        // Find the student's group in the Groups sheet before touching Drive,
+        // so a missing row cannot leave a new image behind.
+        const groupsSheet = getRequiredSheet(spreadsheet, "Groups");
+        const values = groupsSheet.getDataRange().getValues();
+
+        const headers = values[0].map(function(header) {
+          return String(header).trim();
+        });
+
+        const groupCodeIndex = headers.indexOf("GroupCode");
+        const thumbnailIndex = headers.indexOf("Thumbnail");
+
+        if (groupCodeIndex < 0 || thumbnailIndex < 0) {
+          throw new Error(
+            "The Groups sheet must contain GroupCode and Thumbnail columns."
+          );
+        }
+
+        let targetRow = -1;
+
+        for (let i = 1; i < values.length; i++) {
+          if (
+            normalizeGroupCode(values[i][groupCodeIndex]) === groupCode
+          ) {
+            targetRow = i + 1;
+            break;
+          }
+        }
+
+        if (targetRow < 0) {
+          throw new Error("Your assigned group could not be found.");
+        }
+
+        const thumbnailCell = groupsSheet.getRange(
+          targetRow,
+          thumbnailIndex + 1
+        );
+        const existingThumbnailUrl = String(thumbnailCell.getValue() || "").trim();
+        // One stable name per group. The Thumbnail column has a single cell,
+        // so the folder must keep a single image for that group.
+        const fileName = "thumbnail_" + groupCode + "." + extension;
+        const blob = Utilities.newBlob(
+          imageBytes,
+          mimeType,
+          fileName
+        );
+        const file = replaceGroupThumbnailFile(
+          folder,
+          folderId,
+          groupCode,
+          existingThumbnailUrl,
+          blob,
+          fileName
+        );
+
+        // Image access is inherited from the preconfigured thumbnail folder.
+        // The version parameter changes after each edit so browsers reload the
+        // same Drive file instead of showing a cached copy.
+        const thumbnailUrl =
+          "https://drive.google.com/thumbnail?id=" +
+          file.getId() + "&sz=w1200&v=" + new Date().getTime();
+
+        thumbnailCell.setValue(thumbnailUrl);
+
+        return responseJSON({
+          success: true,
+          message: "Project thumbnail uploaded successfully.",
+          thumbnail: thumbnailUrl
+        });
+
+      } finally {
+        lock.releaseLock();
+      }
+    }
+
+    if (action === "deleteThumbnail") {
+      const lock = LockService.getScriptLock();
+      lock.waitLock(10000);
+
+      try {
+        const student = getAuthenticatedStudent(
+          spreadsheet,
+          payload.sessionToken
+        );
+        const groupCode = normalizeGroupCode(student.groupCode);
+        if (!groupCode) {
+          throw new Error("You are not currently assigned to a group.");
+        }
+
+        const groupsSheet = getRequiredSheet(spreadsheet, "Groups");
+        const values = groupsSheet.getDataRange().getValues();
+        if (values.length < 2) {
+          throw new Error("The Groups sheet does not contain any project rows.");
+        }
+        const headers = values[0].map(function(header) {
+          return String(header).trim();
+        });
+        const groupCodeIndex = headers.indexOf("GroupCode");
+        const thumbnailIndex = headers.indexOf("Thumbnail");
+        if (groupCodeIndex < 0 || thumbnailIndex < 0) {
+          throw new Error(
+            "The Groups sheet must contain GroupCode and Thumbnail columns."
+          );
+        }
+
+        let targetRow = -1;
+        for (let i = 1; i < values.length; i++) {
+          if (normalizeGroupCode(values[i][groupCodeIndex]) === groupCode) {
+            targetRow = i + 1;
+            break;
+          }
+        }
+        if (targetRow < 0) {
+          throw new Error("Your assigned group could not be found.");
+        }
+
+        const thumbnailCell = groupsSheet.getRange(
+          targetRow,
+          thumbnailIndex + 1
+        );
+        const thumbnailUrl = String(thumbnailCell.getValue() || "").trim();
+        if (thumbnailUrl) {
+          const fileId = getThumbnailFileId(thumbnailUrl);
+          const folderId = PropertiesService
+            .getScriptProperties()
+            .getProperty("THUMBNAIL_FOLDER_ID");
+          if (!folderId) {
+            throw new Error("THUMBNAIL_FOLDER_ID is missing from Script Properties.");
+          }
+
+          const file = DriveApp.getFileById(fileId);
+          if (!thumbnailFileBelongsToFolder(file, folderId)) {
+            throw new Error("The saved thumbnail is not in the configured thumbnail folder.");
+          }
+
+          file.setTrashed(true);
+          thumbnailCell.clearContent();
+        }
+
+        return responseJSON({
+          success: true,
+          message: "Project thumbnail deleted successfully.",
+          thumbnail: null
+        });
+      } finally {
+        lock.releaseLock();
+      }
+    }
+
+    // -------------------------------------------------
     // INVALID POST ACTION
     // -------------------------------------------------
 
@@ -824,6 +1032,110 @@ function getEvaluationStatusData(submitted) {
   };
 }
 
+function replaceGroupThumbnailFile(
+  folder,
+  folderId,
+  groupCode,
+  existingThumbnailUrl,
+  blob,
+  fileName
+) {
+  const existingFiles = findGroupThumbnailFiles(folder, groupCode);
+  const referencedFile = findReferencedThumbnailFile(
+    existingThumbnailUrl,
+    folderId
+  );
+  if (referencedFile && !existingFiles.some(function(candidate) {
+    return candidate.getId() === referencedFile.getId();
+  })) {
+    existingFiles.push(referencedFile);
+  }
+
+  // A new Drive file ID prevents Drive and browsers from serving the old
+  // thumbnail after its contents are replaced.
+  const file = folder.createFile(blob);
+  file.setName(fileName);
+
+  existingFiles.forEach(function(candidate) {
+    if (candidate.getId() !== file.getId() && !candidate.isTrashed()) {
+      candidate.setTrashed(true);
+    }
+  });
+
+  return file;
+}
+
+function findReferencedThumbnailFile(thumbnailUrl, folderId) {
+  if (!thumbnailUrl) return null;
+
+  let fileId;
+  try {
+    fileId = getThumbnailFileId(thumbnailUrl);
+  } catch (error) {
+    return null;
+  }
+
+  let file;
+  try {
+    file = DriveApp.getFileById(fileId);
+  } catch (error) {
+    return null;
+  }
+
+  if (file.isTrashed()) return null;
+
+  if (!thumbnailFileBelongsToFolder(file, folderId)) {
+    throw new Error("The saved thumbnail is not in the configured thumbnail folder.");
+  }
+
+  return file;
+}
+
+function findGroupThumbnailFiles(folder, groupCode) {
+  const matches = [];
+  const files = folder.getFiles();
+
+  while (files.hasNext()) {
+    const file = files.next();
+    if (!file.isTrashed() && isGroupThumbnailFileName(file.getName(), groupCode)) {
+      matches.push(file);
+    }
+  }
+
+  return matches;
+}
+
+function isGroupThumbnailFileName(name, groupCode) {
+  const upperName = String(name || "").toUpperCase();
+  const prefix = "THUMBNAIL_" + String(groupCode || "").toUpperCase();
+  if (upperName.indexOf(prefix) !== 0) return false;
+
+  const nextCharacter = upperName.charAt(prefix.length);
+  return nextCharacter === "." || nextCharacter === "_";
+}
+
+function thumbnailFileBelongsToFolder(file, folderId) {
+  const parents = file.getParents();
+  while (parents.hasNext()) {
+    if (parents.next().getId() === folderId) return true;
+  }
+  return false;
+}
+
+function getThumbnailFileId(thumbnailUrl) {
+  if (!/^https:\/\/drive\.google\.com\/(?:thumbnail|uc|file\/d\/)/.test(thumbnailUrl)) {
+    throw new Error("The saved thumbnail URL is invalid.");
+  }
+
+  const match = thumbnailUrl.match(
+    /(?:[?&]id=|\/file\/d\/)([A-Za-z0-9_-]+)/
+  );
+  if (!match) {
+    throw new Error("The saved thumbnail URL does not contain a valid file ID.");
+  }
+  return match[1];
+}
+
 
 // Get spreadsheet using Script Properties.
 function getSpreadsheet() {
@@ -933,4 +1245,56 @@ function generateEvaluationId(sheet) {
   const nextNumber = highestNumber + 1;
 
   return "EV-" + String(nextNumber).padStart(4, "0");
+}
+
+function authorizeDriveAccess() {
+  const folder = DriveApp.getFolderById(
+    "1R2tRr5_00JfIg3aukcdK0GcPBw8x-RFv"
+  );
+
+  Logger.log(folder.getName());
+}
+function authorizeDriveWriteAccess() {
+  const folderId = "1R2tRr5_00JfIg3aukcdK0GcPBw8x-RFv";
+
+  const folder = DriveApp.getFolderById(folderId);
+
+  // Create a temporary file to trigger Drive write authorization.
+  const testFile = folder.createFile(
+    "drive-authorization-test.txt",
+    "Temporary authorization test."
+  );
+
+  Logger.log("File created: " + testFile.getName());
+
+  // Move the temporary file to Trash.
+  testFile.setTrashed(true);
+
+  Logger.log("Drive write authorization successful.");
+}
+function testEditorExecution() {
+  Logger.log("Apps Script editor is working.");
+  return "SUCCESS";
+}
+
+function testDriveRootWrite() {
+  const file = DriveApp.createFile(
+    "drive-test.txt",
+    "Testing Drive write access."
+  );
+
+  Logger.log("Created file: " + file.getName());
+
+  file.setTrashed(true);
+
+  Logger.log("Test successful. File moved to trash.");
+}
+
+function authorizeExternalRequest() {
+  const response = UrlFetchApp.fetch("https://www.google.com", {
+    muteHttpExceptions: true
+  });
+
+  Logger.log("External request authorization successful.");
+  Logger.log("Response code: " + response.getResponseCode());
 }

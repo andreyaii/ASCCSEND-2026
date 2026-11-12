@@ -1,10 +1,11 @@
 import { FolderKanban } from 'lucide-react';
 
 export default function ProjectThumb({ project, className = '' }) {
+  const imageUrl = project.imageUrl || project.thumbnail;
   return (
     <div className={`project-thumb-placeholder relative aspect-video w-full overflow-hidden bg-primary-light ${className}`}>
-      {project.imageUrl ? (
-        <img src={project.imageUrl} alt={project.title} className="h-full w-full object-cover" loading="lazy" />
+      {imageUrl ? (
+        <img src={imageUrl} alt={project.title} className="h-full w-full object-cover" loading="lazy" />
       ) : (
         <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-primary/50">
           <FolderKanban className="h-10 w-10" aria-hidden="true" />

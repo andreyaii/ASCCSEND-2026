@@ -21,6 +21,7 @@ const hydrate = (g) => ({
   stage: g.stage || 'Proposal',
   facultyId: g.facultyId || null,
   thumbnail: g.thumbnail || '',
+  imageUrl: g.thumbnail || '',
   proposalLink: g.proposalLink || '',
   pitchVideoLink: g.pitchVideoLink || '',
   documentationLink: g.documentationLink || g.posterLink || '',
@@ -86,4 +87,84 @@ export async function getCategories() {
   const projects = await getProjects();
   const categories = projects.map((p) => p.category).filter(Boolean);
   return [...new Set(categories)].sort();
+}
+
+
+/**
+ * Converts an image File into a Base64 data URL.
+ */
+function convertImageToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(
+      new Error('Failed to read the selected image.')
+    );
+
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Uploads the authenticated student's project thumbnail.
+ */
+export async function uploadProjectThumbnail(file) {
+  if (!file) {
+    throw new Error('Please select an image first.');
+  }
+
+  const allowedTypes = [
+    'image/jpeg',
+    'image/png',
+    'image/webp'
+  ];
+
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error('Only JPG, PNG, and WebP images are allowed.');
+  }
+
+  const MAX_SIZE = 2 * 1024 * 1024;
+
+  if (file.size > MAX_SIZE) {
+    throw new Error('Image size must not exceed 2 MB.');
+  }
+
+  const imageData = await convertImageToBase64(file);
+
+  const response = await request('uploadThumbnail', {
+    method: 'POST',
+    authenticated: true,
+    body: {
+      imageData
+    }
+  });
+
+  if (!response.thumbnail) {
+    throw new Error('The server did not return the uploaded thumbnail URL.');
+  }
+
+  // Invalidate cached project data after successful upload.
+  cachedProjects = undefined;
+  projectsCachedAt = 0;
+  projectsRevision += 1;
+  projectsRequest = null;
+
+  return response.thumbnail;
+}
+
+export async function deleteProjectThumbnail() {
+  const response = await request('deleteThumbnail', {
+    method: 'POST',
+    authenticated: true,
+  });
+
+  if (response.thumbnail !== null) {
+    throw new Error('The server did not confirm thumbnail deletion.');
+  }
+
+  cachedProjects = undefined;
+  projectsCachedAt = 0;
+  projectsRevision += 1;
+  projectsRequest = null;
 }
