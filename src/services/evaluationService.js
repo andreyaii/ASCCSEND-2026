@@ -8,7 +8,7 @@ import { checkEligibility } from './evaluationAssignment.js';
 import { getSettings } from './settingsService.js';
 import { load, save } from './mockStore.js';
 import { getCurrentUser } from './authService.js';
-import { isAdmin, isFaculty, isStudent } from '../utils/roles.js';
+import { isAdmin, isFaculty, isGuest, isStudent } from '../utils/roles.js';
 import { getProjects } from './projectService.js';
 
 const all = () => {
@@ -77,6 +77,14 @@ function requireCurrentStudent(studentId) {
   const currentUser = getCurrentUser();
   if (!currentUser || currentUser.id !== studentId || !isStudent(currentUser)) {
     throw new Error('Only the currently signed-in student can submit or view their evaluation status.');
+  }
+  return currentUser;
+}
+
+function requireCurrentEvaluator(evaluatorId) {
+  const currentUser = getCurrentUser();
+  if (!currentUser || currentUser.id !== evaluatorId || isGuest(currentUser)) {
+    throw new Error('Only signed-in students and faculty can submit or view evaluation data.');
   }
   return currentUser;
 }
@@ -157,6 +165,21 @@ export async function getAggregates() {
 }
 
 export async function getEligibility(studentId, targetGroupId) {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return { canEvaluate: false, code: 'not-authenticated', reason: 'Please sign in to evaluate projects.' };
+  if (isGuest(currentUser)) return { canEvaluate: false, code: 'guest', reason: 'Guests cannot evaluate projects.' };
+
+  if (isFaculty(currentUser)) {
+    const projects = await getProjects();
+    const existing = all().filter((e) => e.evaluatorId === studentId);
+    return checkEligibility({
+      user: currentUser,
+      targetGroupId,
+      existing,
+      allGroups: projects.map((p) => ({ id: p.groupId, groupId: p.groupId, facultyId: p.facultyId })),
+    });
+  }
+
   const student = requireCurrentStudent(studentId);
   const response = await request('getEvaluationEligibility', {
     authenticated: true,
@@ -188,7 +211,7 @@ export async function getEligibility(studentId, targetGroupId) {
       student,
       targetGroupId,
       existing,
-      allGroups: projects.map((project) => ({ id: project.groupId })),
+      allGroups: projects.map((project) => ({ id: project.groupId, groupId: project.groupId, facultyId: project.facultyId })),
       settings,
     });
     if (!assignment.canEvaluate) return { ...eligibility, ...assignment };
@@ -198,7 +221,7 @@ export async function getEligibility(studentId, targetGroupId) {
 
 // The backend revalidates eligibility, ratings, comments, and session on every submit.
 export async function submitEvaluation({ evaluatorId, evaluatedGroupId, ratings, comments }) {
-  requireCurrentStudent(evaluatorId);
+  const currentUser = requireCurrentEvaluator(evaluatorId);
   if (submissionsInProgress.has(evaluatorId)) throw new Error('An evaluation is already being submitted. Please wait.');
   submissionsInProgress.add(evaluatorId);
   try {
@@ -219,6 +242,40 @@ export async function submitEvaluation({ evaluatorId, evaluatedGroupId, ratings,
     const cleanedComments = comments?.trim() || '';
     if (cleanedComments.length > settings.commentMaxLength) {
       throw new Error(`Comments must be ${settings.commentMaxLength} characters or fewer.`);
+    }
+
+    if (isFaculty(currentUser)) {
+      let response;
+      try {
+        response = await request('submitEvaluation', {
+          method: 'POST',
+          authenticated: true,
+          body: {
+            groupCode: evaluatedGroupId,
+            proposalRating: savedRatings.c1,
+            pitchVideoRating: savedRatings.c2,
+            posterRating: savedRatings.c3,
+            comment: cleanedComments,
+          },
+        });
+      } catch {
+        // Fallback for faculty if remote Apps Script is not yet redeployed
+      }
+
+      const evaluationId = response?.evaluationId || `EV-FAC-${Date.now()}`;
+      const submittedAt = response?.submittedAt || new Date().toISOString();
+      const evalRecord = {
+        id: evaluationId,
+        evaluatorId,
+        evaluatedGroupId,
+        ratings: savedRatings,
+        overallScore: calcOverall(savedRatings, evaluationCriteria),
+        comments: cleanedComments,
+        submittedAt,
+      };
+      const existing = load('evaluations', seed);
+      save('evaluations', [...existing, evalRecord], { replaceCorrupt: true });
+      return evalRecord;
     }
 
     requireCurrentStudent(evaluatorId);

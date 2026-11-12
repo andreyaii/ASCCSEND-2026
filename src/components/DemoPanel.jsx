@@ -38,19 +38,6 @@ export default function DemoPanel() {
       {open && (
         <div className="card mb-2 w-72 space-y-3 p-4 text-sm">
           <p className="font-bold">Demo tools (local mock data)</p>
-          <label className="flex cursor-pointer items-center justify-between gap-3">
-            <span>Results published<span className="block text-xs text-muted">Students see ratings only when on</span></span>
-            <input type="checkbox" className="h-4 w-4 accent-primary" checked={settings.resultsPublished}
-              onChange={async (e) => {
-                const published = e.currentTarget.checked;
-                try {
-                  await setResultsPublished(published);
-                  toast.success(`Results ${published ? 'published' : 'unpublished'}.`);
-                } catch (error) {
-                  toast.error(error.message);
-                }
-              }} />
-          </label>
           <button className="btn-secondary w-full" onClick={() => setConfirming(true)}>Reset evaluations &amp; settings</button>
         </div>
       )}

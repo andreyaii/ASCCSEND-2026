@@ -2,15 +2,14 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { GraduationCap, LogOut, Menu, Moon, Sun, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { studentNav, facultyNav } from '../config/navigation';
-import { isStudent, isFaculty } from '../utils/roles';
-import RatingsAdminControl from '../components/RatingsAdminControl';
+import { studentNav, facultyNav, guestNav } from '../config/navigation';
+import { isStudent, isFaculty, isGuest } from '../utils/roles';
 import DemoPanel from '../components/DemoPanel';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 
-// One layout for every role: only the nav items differ. Advisers and Admins get identical navigation.
+// One layout for every role: only the nav items differ.
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const toast = useToast();
@@ -19,8 +18,8 @@ export default function AppLayout() {
   const { theme, toggleTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
-  const nav = isStudent(user) ? studentNav : facultyNav;
-  const roleLabel = isFaculty(user) ? `Faculty · ${user.role}` : 'Student';
+  const nav = isStudent(user) ? studentNav : isGuest(user) ? guestNav : facultyNav;
+  const roleLabel = isGuest(user) ? 'Guest' : isFaculty(user) ? `Faculty · ${user.role}` : 'Student';
   const themeToggle = (
     <button
       type="button"
@@ -73,7 +72,7 @@ export default function AppLayout() {
         <div className="mb-2 flex items-center justify-between gap-2 px-3">
           <div className="min-w-0">
             <p className="truncate text-sm font-bold">{user.name}</p>
-            <span className={isFaculty(user) ? 'badge-primary' : 'badge-green'}>{roleLabel}</span>
+            <span className={isGuest(user) ? 'badge-primary' : isFaculty(user) ? 'badge-primary' : 'badge-green'}>{roleLabel}</span>
           </div>
           {themeToggle}
         </div>
@@ -110,7 +109,6 @@ export default function AppLayout() {
       )}
 
       <main className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
-        <RatingsAdminControl />
         <Outlet />
       </main>
 

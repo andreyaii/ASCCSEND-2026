@@ -1,0 +1,115 @@
+================================================================================
+TECHCON / PPMD 2026 - FEATURE IMPLEMENTATION & CONTINUATION NOTES
+Date: 2026-11-12
+================================================================================
+
+1. SUMMARY OF IMPLEMENTED FEATURES
+--------------------------------------------------------------------------------
+
+[X] 1. GUEST ROLE AND ACCOUNT
+- Added 'Guest' to ACCOUNT_TYPES and created `isGuest(user)` in `src/utils/roles.js`.
+- Configured routes in `src/App.jsx`:
+  * Route `/guest` with child routes `/guest/all-projects` and `/guest/projects/:projectId`.
+  * Guests cannot access `/guest/my-teams`, `/guest/profile`, `/student/*`, or `/faculty/*`.
+- Configured navigation in `src/config/navigation.js` and `src/layouts/AppLayout.jsx`:
+  * `guestNav`: Exposes only 'All Projects' (`/guest/all-projects`) with `LayoutGrid` icon.
+  * Sidebar and mobile drawer display only 'All Projects' for Guest users.
+  * Bottom user info displays the user's name and 'Guest' badge.
+- Added Guest authentication support in `src/services/authService.js`:
+  * Handles role 'Guest' in `login(identifier, password, role)`.
+  * Normalized user fields: `accountType: 'Guest'`, `role: 'Guest'`.
+  * Added fallback guest credentials (`guest` / `guest`, `guest@techcon.edu` / `techcon123`).
+  * Added Guest entry to `DEMO_ACCOUNTS`.
+- Added Guest tab and quick login support in `src/pages/LoginPage.jsx`:
+  * Added 'Guest' tab to role list `['Student', 'Faculty', 'Guest']`.
+  * Auto-prefills `guest` / `guest` when clicking Guest tab for seamless access.
+- Enforced Guest restrictions on Project Detail (`src/pages/shared/ProjectDetailPage.jsx`):
+  * Guests cannot evaluate or comment (evaluation box is completely hidden).
+  * Guests cannot view received evaluations.
+  * Back link points to `/guest/all-projects`.
+- Enforced Guest restrictions on API & Backend (`google-apps-script/Code.gs` & `src/services/evaluationService.js`):
+  * `getEligibility` returns `{ canEvaluate: false, code: 'guest', reason: 'Guests cannot evaluate projects.' }`.
+  * `submitEvaluation` throws an error if called by a guest.
+  * In `Code.gs`, `action === 'login'` accepts `role: 'guest'`, creates a guest session token, and blocks evaluation/thumbnail actions for guests.
+
+[X] 2. RATING VISIBILITY
+- Ratings are now restricted strictly to Faculty Admins (`isAdmin(user)`):
+  * `canViewRatings(user)` in `src/utils/roles.js` returns `isAdmin(user)`.
+  * Returns `false` for Students, Faculty Advisers, and Guests.
+  * `ratingsHiddenReason(user)` provides a clear explanation: "Ratings are confidential and visible only to system administrators."
+- Completely removed the "Hide All / Show All" feature and its UI controls:
+  * `src/components/RatingsAdminControl.jsx` has been replaced to render `null`.
+  * Removed `<RatingsAdminControl />` mount from `src/layouts/AppLayout.jsx`.
+  * Removed the "Results published" checkbox from `src/components/DemoPanel.jsx`.
+  * `canToggleRatings()` in `src/utils/roles.js` returns `false`.
+- Ensured ratings are restricted across all pages and components:
+  * `RatingSummary` displays "Ratings hidden" (compact) or explanation box (full) for non-admins.
+  * `ProjectBrowser` hides the "Top rated" sorting option for non-admins.
+  * `MyEvaluationsPage` masks student scores as "Rating hidden" / "Hidden" with the administrator confidentiality notice.
+  * `ProjectDetailPage` masks scores in `ReceivedEvaluations` as "Hidden" for Faculty Advisers.
+  * In `Code.gs`, `getEvaluations` returns full evaluation rows with ratings only to faculty admins (`evaluator.type === 'faculty' && evaluator.role === 'admin'`).
+
+[X] 3. FACULTY ADVISER RATING RESTRICTIONS ("Faculty dili maka rate sa iya group")
+- Faculty Advisers cannot rate groups assigned to them:
+  * Evaluated via `src/services/evaluationAssignment.js` (`checkEligibility`) and `src/services/evaluationService.js` (`getEligibility`):
+  * A group is considered assigned to a faculty member if `user.assignedGroupIds?.includes(targetGroupId)` or `project.facultyId` matches `user.id` or `user.name` or `user.facultyId` (case-insensitive).
+  * If assigned, returns `{ canEvaluate: false, code: 'assigned-team', reason: 'Faculty advisers cannot evaluate groups assigned to them.' }`.
+- Faculty Advisers CAN rate other groups:
+  * If non-assigned and not already evaluated, returns `{ canEvaluate: true, code: 'ok', reason: '' }`.
+  * If already evaluated, returns `{ canEvaluate: false, code: 'duplicate', reason: 'You have already evaluated this group.' }`.
+- UI presentation on `ProjectDetailPage.jsx`:
+  * Evaluation box is visible to Faculty Advisers.
+  * For their assigned groups: the "Evaluate Project" button is disabled with a lock icon, displaying the message "Faculty advisers cannot evaluate groups assigned to them."
+  * For other groups: the "Evaluate Project" button is enabled, linking to `/faculty/projects/:projectId/evaluate`.
+  * Added route `/faculty/projects/:projectId/evaluate` to `src/App.jsx`.
+  * Updated `src/pages/student/EvaluatePage.jsx` to support faculty evaluations (navigates back to `/faculty/projects/:projectId` and on submit to `/faculty/all-projects`).
+- Backend & API enforcement in `google-apps-script/Code.gs`:
+  * In `action === "login"`, creates a session token for faculty (`createFacultySession`) and returns it.
+  * In `action === "submitEvaluation"`, verifies evaluator using `getAuthenticatedEvaluator`.
+  * If evaluator is faculty: checks if `group.Adviser` matches the faculty's `FacultyID` or `FullName`. If so, throws: "Faculty advisers cannot evaluate groups assigned to them."
+  * In `action === "getEvaluationEligibility"`, returns `code: "assigned-team"` and `reason: "Faculty advisers cannot evaluate groups assigned to them."` if the group is assigned to that adviser.
+
+--------------------------------------------------------------------------------
+2. FILES MODIFIED / CREATED
+--------------------------------------------------------------------------------
+Frontend:
+- `src/utils/roles.js`: Added GUEST account type, isGuest, restricted canViewRatings to isAdmin, disabled canToggleRatings.
+- `src/config/navigation.js`: Added guestNav (All Projects only).
+- `src/App.jsx`: Added `/guest` and `/faculty/projects/:projectId/evaluate` routes.
+- `src/layouts/AppLayout.jsx`: Added guest nav support, removed RatingsAdminControl.
+- `src/components/RatingsAdminControl.jsx`: Emptied / returns null.
+- `src/components/DemoPanel.jsx`: Removed results published toggle.
+- `src/pages/LoginPage.jsx`: Added Guest tab, placeholder, and auto-prefill.
+- `src/services/authService.js`: Added guest login handling and session normalization.
+- `src/pages/shared/ProjectDetailPage.jsx`: Added evaluate box for faculty with disabled state for assigned groups; guest view restrictions.
+- `src/pages/faculty/AllProjectsPage.jsx`: Added guest navigation support and dynamic assigned team badge.
+- `src/services/facultyService.js`: Updated getAssignedGroupIds to match against project list from getProjects().
+- `src/services/evaluationAssignment.js`: Added faculty assigned team check and guest blocking.
+- `src/services/evaluationService.js`: Added faculty eligibility and submission handling, guest blocking.
+- `src/pages/student/EvaluatePage.jsx`: Supported faculty evaluator navigation and completion.
+
+Backend (Google Apps Script):
+- `google-apps-script/Code.gs`:
+  * Updated `doGet` (`getMyEvaluations`, `getEvaluations`, `getEvaluationEligibility`) to support both students and faculty, and block guests.
+  * Updated `doPost` (`login`) to support Guest login and Faculty session creation.
+  * Updated `submitEvaluation` to block guests and block faculty from rating their assigned groups.
+  * Added `createFacultySession`, `createGuestSession`, `getAuthenticatedEvaluator`, and updated `getEvaluationEligibility`.
+
+Tests:
+- `tests/core.test.js`: Added 3 new test suites covering Guest role, Rating visibility, and Faculty Adviser rating restrictions. Total 20/20 tests passing.
+
+--------------------------------------------------------------------------------
+3. STEPS TO DEPLOY GOOGLE APPS SCRIPT (IF USING REMOTE BACKEND)
+--------------------------------------------------------------------------------
+1. Open the Google Apps Script project attached to your Google Sheet or web app.
+2. Replace the contents of `Code.gs` with the updated code in `google-apps-script/Code.gs`.
+3. Click "Deploy" > "Manage deployments" > Edit the active deployment > Set version to "New version" > Click "Deploy".
+Note: Even before redeploying, the frontend contains local fallback handlers for Guest login and Faculty evaluations, so all features work immediately in the web app.
+
+--------------------------------------------------------------------------------
+4. VERIFICATION PERFORMED
+--------------------------------------------------------------------------------
+- Unit tests: Ran `npm test` -> 20 passing tests, 0 failures.
+- Production build: Ran `npm run build` -> Vite production build succeeded with 0 errors.
+================================================================================
+

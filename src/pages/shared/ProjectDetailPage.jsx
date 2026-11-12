@@ -12,19 +12,21 @@ import { useSettings } from '../../context/SettingsContext';
 import { useAsync } from '../../hooks/useAsync';
 import { getProjectById } from '../../services/projectService';
 import { getAggregates, getEligibility, getEvaluationsForGroup } from '../../services/evaluationService';
-import { isStudent, basePathFor } from '../../utils/roles';
+import { isStudent, isFaculty, isGuest, basePathFor } from '../../utils/roles';
 import { formatDate, formatScore } from '../../utils/ratings';
 import { getProjectLogoUrl } from '../../utils/projectLogo';
 
-function StudentEvaluateBox({ eligibility, status, projectId }) {
+function EvaluateBox({ eligibility, status, projectId, isStudent }) {
+  if (!eligibility) return null;
   if (eligibility.code === 'duplicate') {
     return <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700"><CheckCircle2 className="h-5 w-5" /> You have submitted an evaluation for this group.</p>;
   }
+  const evaluatePath = isStudent ? `/student/projects/${projectId}/evaluate` : `/faculty/projects/${projectId}/evaluate`;
   return (
     <div className="space-y-3">
-      <EvaluationCounter status={status} />
+      {isStudent && <EvaluationCounter status={status} />}
       {eligibility.canEvaluate ? (
-        <Link to={`/student/projects/${projectId}/evaluate`} className="btn-primary">Evaluate Project</Link>
+        <Link to={evaluatePath} className="btn-primary">Evaluate Project</Link>
       ) : (
         <>
           <button className="btn-primary" disabled><Lock className="h-4 w-4" /> Evaluate Project</button>
@@ -69,6 +71,8 @@ export default function ProjectDetailPage() {
   const { user } = useAuth();
   const [logoPreviewUrl, setLogoPreviewUrl] = useState('');
   const student = isStudent(user);
+  const faculty = isFaculty(user);
+  const guest = isGuest(user);
   const base = basePathFor(user);
 
   const { data, loading, error, reload } = useAsync(async (force) => {
@@ -76,8 +80,8 @@ export default function ProjectDetailPage() {
     if (!project) return { project: null };
     const [aggregates, eligibility, received] = await Promise.all([
       getAggregates(),
-      student ? getEligibility(user.id, project.groupId) : null,
-      student ? [] : getEvaluationsForGroup(project.groupId, user),
+      !guest ? getEligibility(user.id, project.groupId) : null,
+      faculty ? getEvaluationsForGroup(project.groupId, user) : [],
     ]);
     return {
       project,
@@ -86,7 +90,7 @@ export default function ProjectDetailPage() {
       status: eligibility,
       received,
     };
-  }, [projectId, user.id], `project-detail:${student ? 'student' : 'faculty'}:${user.id}:${projectId}`);
+  }, [projectId, user.id], `project-detail:${guest ? 'guest' : student ? 'student' : 'faculty'}:${user.id}:${projectId}`);
 
   if (loading) return <Loading />;
   if (error) return <ErrorState error={error} onRetry={reload} />;
@@ -132,13 +136,13 @@ export default function ProjectDetailPage() {
 
       <section className="card space-y-3 p-5 sm:p-6"><h2 className="text-lg font-bold">Rating</h2><RatingSummary aggregate={aggregate} variant="full" /></section>
 
-      {student && (
+      {!guest && (
         <section className="card space-y-3 p-5 sm:p-6">
           <h2 className="text-lg font-bold">Evaluate this project</h2>
-          <StudentEvaluateBox eligibility={eligibility} status={status} projectId={project.id} />
+          <EvaluateBox eligibility={eligibility} status={status} projectId={project.id} isStudent={student} />
         </section>
       )}
-      {!student && <ReceivedEvaluations evaluations={received} />}
+      {faculty && <ReceivedEvaluations evaluations={received} />}
       <Modal open={Boolean(logoPreviewUrl)} title={`${project.title} logo`} onClose={() => setLogoPreviewUrl('')} size="wide">
         <div className="flex max-h-[70vh] min-h-48 items-center justify-center rounded-xl bg-[#0D0D12] p-4">
           <img src={logoPreviewUrl} alt={`${project.title} logo`} className="max-h-[65vh] max-w-full object-contain" />

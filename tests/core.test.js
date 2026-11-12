@@ -9,6 +9,9 @@ import { students } from '../src/data/students.js';
 import { groups } from '../src/data/groups.js';
 import { calcOverall } from '../src/utils/ratings.js';
 import { getProjectLogoUrl } from '../src/utils/projectLogo.js';
+import { isGuest, isFaculty, isStudent, isAdmin, canViewRatings, canToggleRatings, homePathFor, basePathFor, ratingsHiddenReason } from '../src/utils/roles.js';
+import { guestNav } from '../src/config/navigation.js';
+import { login } from '../src/services/authService.js';
 
 const entries = new Map();
 let apiEvaluations;
@@ -330,4 +333,78 @@ test('corrupted local demo data and failed writes surface explicit errors', () =
   entries.set('techcon:evaluations', '{invalid');
   assert.throws(() => load('evaluations', []), /corrupted/);
   assert.throws(() => save('evaluations', []), /corrupted/);
+});
+
+test('guest role restricts access to all-projects and blocks evaluations and ratings', async () => {
+  const guestUser = { id: 'GUEST-001', accountType: 'Guest', role: 'Guest', name: 'Guest User' };
+  assert.equal(isGuest(guestUser), true);
+  assert.equal(isStudent(guestUser), false);
+  assert.equal(isFaculty(guestUser), false);
+  assert.equal(isAdmin(guestUser), false);
+  assert.equal(homePathFor(guestUser), '/guest/all-projects');
+  assert.equal(basePathFor(guestUser), '/guest');
+  assert.equal(canViewRatings(guestUser), false);
+  assert.deepEqual(guestNav, [{ to: '/guest/all-projects', label: 'All Projects', icon: guestNav[0].icon }]);
+
+  entries.set('techcon:session', JSON.stringify({ user: guestUser, sessionToken: 'guest-session' }));
+  const eligibility = await getEligibility(guestUser.id, 'g2');
+  assert.equal(eligibility.canEvaluate, false);
+  assert.equal(eligibility.code, 'guest');
+
+  await assert.rejects(
+    submitEvaluation({ evaluatorId: guestUser.id, evaluatedGroupId: 'g2', ratings: validRatings, comments: '' }),
+    /Only signed-in students and faculty/
+  );
+});
+
+test('rating visibility is strictly limited to faculty admins', () => {
+  const student = { id: 's1', accountType: 'Student', role: 'Student' };
+  const adviser = { id: 'f1', accountType: 'Faculty', role: 'Adviser' };
+  const admin = { id: 'f3', accountType: 'Faculty', role: 'Admin' };
+  const guest = { id: 'g-1', accountType: 'Guest', role: 'Guest' };
+
+  assert.equal(canViewRatings(admin), true);
+  assert.equal(canViewRatings(student), false);
+  assert.equal(canViewRatings(adviser), false);
+  assert.equal(canViewRatings(guest), false);
+  assert.equal(canToggleRatings(), false);
+  assert.match(ratingsHiddenReason(student), /visible only to system administrators/i);
+  assert.match(ratingsHiddenReason(adviser), /visible only to system administrators/i);
+  assert.match(ratingsHiddenReason(guest), /visible only to system administrators/i);
+});
+
+test('faculty advisers cannot rate their assigned groups but can rate other groups', async () => {
+  const adviser = {
+    id: 'f1',
+    accountType: 'Faculty',
+    role: 'Adviser',
+    name: 'Prof. Maria Santos',
+    assignedGroupIds: ['g1', 'g2'],
+  };
+  entries.set('techcon:session', JSON.stringify({ user: adviser, sessionToken: 'faculty-session' }));
+
+  // Assigned group: must be blocked
+  const assignedEligibility = await getEligibility(adviser.id, 'g1');
+  assert.equal(assignedEligibility.canEvaluate, false);
+  assert.equal(assignedEligibility.code, 'assigned-team');
+  assert.match(assignedEligibility.reason, /Faculty advisers cannot evaluate groups assigned to them/i);
+
+  await assert.rejects(
+    submitEvaluation({ evaluatorId: adviser.id, evaluatedGroupId: 'g1', ratings: validRatings, comments: '' }),
+    /Faculty advisers cannot evaluate groups assigned to them/i
+  );
+
+  // Non-assigned group: must be allowed
+  const otherEligibility = await getEligibility(adviser.id, 'g4');
+  assert.equal(otherEligibility.canEvaluate, true);
+  assert.equal(otherEligibility.code, 'ok');
+
+  const result = await submitEvaluation({
+    evaluatorId: adviser.id,
+    evaluatedGroupId: 'g4',
+    ratings: validRatings,
+    comments: 'Great presentation',
+  });
+  assert.equal(result.evaluatedGroupId, 'g4');
+  assert.equal(result.overallScore, 4);
 });

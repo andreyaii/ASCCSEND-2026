@@ -13,6 +13,7 @@ import { getProjectById } from '../../services/projectService';
 import { getEligibility, getEvaluationStatus, submitEvaluation } from '../../services/evaluationService';
 import { getEvaluationCriteria } from '../../services/settingsService';
 import { calcOverall, formatScore } from '../../utils/ratings';
+import { isStudent } from '../../utils/roles';
 
 export default function EvaluatePage() {
   const { projectId } = useParams();
@@ -43,9 +44,10 @@ export default function EvaluatePage() {
   if (loading) return <Loading />;
   if (error) return <ErrorState error={error} onRetry={reload} />;
   const { project, criteria, eligibility, status } = data;
-  const back = `/student/projects/${projectId}`;
+  const studentUser = isStudent(user);
+  const back = studentUser ? `/student/projects/${projectId}` : `/faculty/projects/${projectId}`;
 
-  if (!project) return <EmptyState title="Project not found" action={<Link to="/student/explore" className="btn-secondary">Back to Explore</Link>} />;
+  if (!project) return <EmptyState title="Project not found" action={<Link to={studentUser ? "/student/explore" : "/faculty/all-projects"} className="btn-secondary">Back to Projects</Link>} />;
 
   if (submissionComplete) {
     return (
@@ -54,10 +56,12 @@ export default function EvaluatePage() {
           <h1 className="text-xl font-bold">Evaluation submitted</h1>
           <p className="text-sm text-muted">Your evaluation of {project.group?.groupName || 'this group'} was saved successfully.</p>
         </div>
-        <EvaluationCounter status={refreshedStatus || status} />
+        {studentUser && <EvaluationCounter status={refreshedStatus || status} />}
         {statusRefreshError && <p className="text-center text-sm text-red-600">{statusRefreshError}</p>}
         <div className="flex justify-center">
-          <Link to="/student/evaluations" className="btn-primary">View My Evaluations</Link>
+          <Link to={studentUser ? "/student/evaluations" : "/faculty/all-projects"} className="btn-primary">
+            {studentUser ? "View My Evaluations" : "Back to All Projects"}
+          </Link>
         </div>
       </div>
     );
@@ -94,14 +98,19 @@ export default function EvaluatePage() {
     setSubmissionComplete(true);
     setConfirming(false);
     toast.success('Evaluation submitted.');
-    try {
-      const nextStatus = await getEvaluationStatus(user.id);
-      setRefreshedStatus(nextStatus);
-      navigate('/student/evaluations', { replace: true });
-    } catch (e) {
-      setStatusRefreshError(e.message || 'Could not refresh your evaluation status.');
-    } finally {
+    if (studentUser) {
+      try {
+        const nextStatus = await getEvaluationStatus(user.id);
+        setRefreshedStatus(nextStatus);
+        navigate('/student/evaluations', { replace: true });
+      } catch (e) {
+        setStatusRefreshError(e.message || 'Could not refresh your evaluation status.');
+      } finally {
+        setBusy(false);
+      }
+    } else {
       setBusy(false);
+      navigate('/faculty/all-projects', { replace: true });
     }
   };
 
@@ -114,7 +123,7 @@ export default function EvaluatePage() {
         <h1 className="text-2xl font-bold leading-snug">{project.title}</h1>
         <p className="mt-1 text-sm text-muted">Rate each criterion from 1 to 5. All criteria are required; comments are optional.</p>
       </header>
-      <EvaluationCounter status={status} />
+      {studentUser && <EvaluationCounter status={status} />}
 
       <form className="card p-5 sm:p-7" onSubmit={(e) => { e.preventDefault(); if (complete) setConfirming(true); }}>
         <p className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900">Rate the proposal, pitch video, and poster. Each criterion has equal weight.</p>

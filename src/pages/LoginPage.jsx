@@ -13,14 +13,16 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { homePathFor } from '../utils/roles';
 
-const roles = ['Student', 'Faculty'];
+const roles = ['Student', 'Faculty', 'Guest'];
 const identifierLabels = {
   Student: 'Student ID / Student No.',
   Faculty: 'Faculty ID / Institutional Email',
+  Guest: 'Guest Username / Email',
 };
 const identifierPlaceholders = {
   Student: 'Enter your Student ID or Student No.',
   Faculty: 'Faculty ID or name@cit.edu',
+  Guest: 'guest (or guest@techcon.edu)',
 };
 
 export default function LoginPage() {
@@ -134,6 +136,13 @@ export default function LoginPage() {
                   onClick={() => {
                     setRole(item);
                     setError('');
+                    if (item === 'Guest') {
+                      if (!identifier) setIdentifier('guest');
+                      if (!password) setPassword('guest');
+                    } else if (identifier === 'guest') {
+                      setIdentifier('');
+                      setPassword('');
+                    }
                   }}
                 >
                   {item}

@@ -12,7 +12,7 @@ import ProjectDetailPage from './pages/shared/ProjectDetailPage';
 import ProfilePage from './pages/shared/ProfilePage';
 import { EmptyState } from './components/Feedback';
 import { useAuth } from './context/AuthContext';
-import { homePathFor, isFaculty, isStudent } from './utils/roles';
+import { homePathFor, isFaculty, isGuest, isStudent } from './utils/roles';
 
 export default function App() {
   const { user } = useAuth();
@@ -38,7 +38,16 @@ export default function App() {
           <Route path="all-projects" element={<AllProjectsPage />} />
           <Route path="my-teams" element={<MyTeamsPage />} />
           <Route path="projects/:projectId" element={<ProjectDetailPage />} />
+          <Route path="projects/:projectId/evaluate" element={<EvaluatePage />} />
           <Route path="profile" element={<ProfilePage />} />
+        </Route>
+      </Route>
+
+      <Route element={<ProtectedRoute allow={isGuest} />}>
+        <Route path="/guest" element={<AppLayout />}>
+          <Route index element={<Navigate to="all-projects" replace />} />
+          <Route path="all-projects" element={<AllProjectsPage />} />
+          <Route path="projects/:projectId" element={<ProjectDetailPage />} />
         </Route>
       </Route>
 

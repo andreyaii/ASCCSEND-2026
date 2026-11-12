@@ -251,14 +251,22 @@ function doGet(e) {
       action === "getEvaluationStatus" ||
       action === "getEvaluationEligibility"
     ) {
-      const student = getAuthenticatedStudent(
+      const evaluator = getAuthenticatedEvaluator(
         spreadsheet,
         e.parameter.sessionToken
       );
-      const evaluations = getEvaluationRows(
-        getRequiredSheet(spreadsheet, "Evaluations")
-      ).filter(function(evaluation) {
-        return String(evaluation.StudentID || "").trim() === student.studentId;
+
+      if (evaluator.type === "guest") {
+        return responseJSON({
+          success: false,
+          message: "Guests cannot view or submit evaluations."
+        });
+      }
+
+      const evalSheet = getRequiredSheet(spreadsheet, "Evaluations");
+      const evaluatorId = evaluator.type === "student" ? evaluator.studentId : evaluator.facultyId;
+      const evaluations = getEvaluationRows(evalSheet).filter(function(evaluation) {
+        return String(evaluation.StudentID || "").trim() === evaluatorId;
       });
       const groups = action === "getEvaluationEligibility"
         ? getGroupCodes(spreadsheet)
@@ -275,9 +283,10 @@ function doGet(e) {
       }
 
       if (action === "getMyEvaluations" || action === "getEvaluations") {
+        const isFacultyAdmin = evaluator.type === "faculty" && evaluator.role === "admin";
         return responseJSON({
           success: true,
-          data: evaluations
+          data: isFacultyAdmin ? getEvaluationRows(evalSheet) : evaluations
         });
       }
 
@@ -291,10 +300,11 @@ function doGet(e) {
       return responseJSON({
         success: true,
         data: getEvaluationEligibility(
-          student,
+          evaluator,
           e.parameter.groupCode,
           evaluations,
-          groups
+          groups,
+          spreadsheet
         )
       });
     }
@@ -376,15 +386,59 @@ function doPost(e) {
         throw new Error("Please provide your login credentials and role.");
       }
 
+      const isGuest = role.toLowerCase() === "guest";
       const isFacultyOrAdmin =
         role.toLowerCase() === "faculty" ||
         role.toLowerCase() === "admin";
 
       if (
         !isFacultyOrAdmin &&
+        !isGuest &&
         role.toLowerCase() !== "student"
       ) {
         throw new Error("Invalid login role.");
+      }
+
+      // GUEST LOGIN
+      if (isGuest) {
+        let guestUser = null;
+        const guestSheet = spreadsheet.getSheetByName("Guests");
+        if (guestSheet) {
+          const guests = getSheetData(guestSheet);
+          guestUser = guests.find(function(g) {
+            const gid = String(g.GuestID || g.ID || g.Email || g.Username || "").trim().toLowerCase();
+            const gpass = String(g.Password || "").trim();
+            return gid === identifier.toLowerCase() && gpass === password;
+          });
+        }
+        if (!guestUser) {
+          const validGuestId = identifier.toLowerCase() === "guest" || identifier.toLowerCase() === "guest@techcon.edu" || identifier.toLowerCase() === "guest-001";
+          const validGuestPass = password === "guest" || password === "techcon123" || password === "guest123";
+          if (validGuestId && validGuestPass) {
+            guestUser = {
+              GuestID: "GUEST-001",
+              FullName: "Guest User",
+              Role: "Guest"
+            };
+          }
+        }
+        if (!guestUser) {
+          return responseJSON({
+            success: false,
+            message: "Invalid credentials for Guest. Use guest / guest."
+          });
+        }
+        const sessionToken = createGuestSession(guestUser.GuestID || "GUEST-001");
+        return responseJSON({
+          success: true,
+          sessionToken: sessionToken,
+          user: {
+            GuestID: guestUser.GuestID || "GUEST-001",
+            FullName: guestUser.FullName || "Guest User",
+            Role: "Guest"
+          },
+          role: "guest"
+        });
       }
 
       const sheetName = isFacultyOrAdmin
@@ -469,8 +523,10 @@ function doPost(e) {
 
       // FACULTY / ADMIN USER RESPONSE
       if (isFacultyOrAdmin) {
+        const sessionToken = createFacultySession(user.FacultyID, normalizeFacultyRole(user.Role));
         return responseJSON({
           success: true,
+          sessionToken: sessionToken,
           user: {
             FacultyID: user.FacultyID,
             FullName: user.FullName,
@@ -531,10 +587,14 @@ function doPost(e) {
       lock.waitLock(10000);
 
       try {
-        const student = getAuthenticatedStudent(
+        const evaluator = getAuthenticatedEvaluator(
           spreadsheet,
           payload.sessionToken
         );
+        if (evaluator.type === "guest") {
+          throw new Error("Guests cannot evaluate projects.");
+        }
+
         const requestedGroupCode = String(payload.groupCode || "").trim();
         if (!requestedGroupCode) {
           throw new Error("Group Code is required.");
@@ -551,26 +611,41 @@ function doPost(e) {
           throw new Error("Comment must be 500 characters or fewer.");
         }
 
-        const groupCode = getGroupCodes(spreadsheet).find(function(candidate) {
-          return normalizeGroupCode(candidate) === normalizeGroupCode(requestedGroupCode);
+        const groupsSheet = getRequiredSheet(spreadsheet, "Groups");
+        const groupsData = getSheetData(groupsSheet);
+        const group = groupsData.find(function(candidate) {
+          return normalizeGroupCode(candidate.GroupCode) === normalizeGroupCode(requestedGroupCode);
         });
-        if (!groupCode) {
+        if (!group) {
           throw new Error("This project group could not be found.");
         }
-        if (normalizeGroupCode(student.groupCode) === normalizeGroupCode(groupCode)) {
-          throw new Error("You cannot evaluate your own group.");
+        const groupCode = group.GroupCode;
+
+        if (evaluator.type === "student") {
+          if (normalizeGroupCode(evaluator.groupCode) === normalizeGroupCode(groupCode)) {
+            throw new Error("You cannot evaluate your own group.");
+          }
+        } else if (evaluator.type === "faculty") {
+          // Faculty Advisers cannot rate groups assigned to them.
+          const adviser = String(group.Adviser || "").trim().toLowerCase();
+          const facultyId = String(evaluator.facultyId || "").trim().toLowerCase();
+          const facultyName = String(evaluator.fullName || "").trim().toLowerCase();
+          if (adviser && (adviser === facultyId || adviser === facultyName)) {
+            throw new Error("Faculty advisers cannot evaluate groups assigned to them.");
+          }
         }
 
+        const evaluatorId = evaluator.type === "student" ? evaluator.studentId : evaluator.facultyId;
         const evaluations = getEvaluationRows(evalSheet);
         const mine = evaluations.filter(function(evaluation) {
-          return String(evaluation.StudentID || "").trim() === student.studentId;
+          return String(evaluation.StudentID || "").trim() === evaluatorId;
         });
         if (mine.some(function(evaluation) {
           return normalizeGroupCode(evaluation.GroupCode) === normalizeGroupCode(groupCode);
         })) {
           throw new Error("You have already evaluated this group.");
         }
-       const evaluationId = generateEvaluationId(evalSheet);
+        const evaluationId = generateEvaluationId(evalSheet);
 
         const submittedAt = Utilities.formatDate(
           new Date(),
@@ -579,7 +654,7 @@ function doPost(e) {
         );
         evalSheet.appendRow([
           evaluationId,
-          student.studentId,
+          evaluatorId,
           groupCode,
           proposalRating,
           pitchVideoRating,
@@ -901,6 +976,75 @@ function createStudentSession(studentId) {
   return sessionToken;
 }
 
+function createFacultySession(facultyId, role) {
+  if (!facultyId) {
+    throw new Error("The authenticated faculty does not have a FacultyID.");
+  }
+  const sessionToken = Utilities.getUuid();
+  CacheService.getScriptCache().put(
+    "faculty-session:" + sessionToken,
+    JSON.stringify({ facultyId: facultyId, role: role }),
+    21600
+  );
+  return sessionToken;
+}
+
+function createGuestSession(guestId) {
+  const sessionToken = Utilities.getUuid();
+  CacheService.getScriptCache().put(
+    "guest-session:" + sessionToken,
+    JSON.stringify({ guestId: guestId || "GUEST-001" }),
+    21600
+  );
+  return sessionToken;
+}
+
+function getAuthenticatedEvaluator(spreadsheet, sessionToken) {
+  const token = String(sessionToken || "").trim();
+  if (!token) {
+    throw new Error("A valid session is required. Please sign in again.");
+  }
+
+  // Check guest cache
+  const guestData = CacheService.getScriptCache().get("guest-session:" + token);
+  if (guestData) {
+    return { type: "guest", guestId: "GUEST-001" };
+  }
+
+  // Check faculty cache
+  const facultyData = CacheService.getScriptCache().get("faculty-session:" + token);
+  if (facultyData) {
+    let parsed;
+    try {
+      parsed = JSON.parse(facultyData);
+    } catch (e) {
+      throw new Error("Your faculty session is invalid. Please sign in again.");
+    }
+    const facultySheet = getRequiredSheet(spreadsheet, "Faculty");
+    const facultyMembers = getSheetData(facultySheet);
+    const member = facultyMembers.find(function(f) {
+      return String(f.FacultyID || "").trim() === parsed.facultyId;
+    });
+    if (!member) {
+      throw new Error("The faculty account for this session could not be found.");
+    }
+    return {
+      type: "faculty",
+      facultyId: String(member.FacultyID || "").trim(),
+      fullName: String(member.FullName || "").trim(),
+      role: normalizeFacultyRole(member.Role)
+    };
+  }
+
+  // Check student cache
+  const student = getAuthenticatedStudent(spreadsheet, token);
+  return {
+    type: "student",
+    studentId: student.studentId,
+    groupCode: student.groupCode
+  };
+}
+
 function getAuthenticatedStudent(spreadsheet, sessionToken) {
   const token = String(sessionToken || "").trim();
   if (!token) {
@@ -985,7 +1129,16 @@ function validateRating(value) {
   return value;
 }
 
-function getEvaluationEligibility(student, groupCode, evaluations, groups) {
+function getEvaluationEligibility(evaluator, groupCode, evaluations, groups, spreadsheet) {
+  if (evaluator.type === "guest") {
+    return {
+      canEvaluate: false,
+      code: "guest",
+      reason: "Guests cannot evaluate projects.",
+      submitted: 0
+    };
+  }
+
   const requestedGroupCode = normalizeGroupCode(groupCode);
   const foundGroup = groups.some(function(candidate) {
     return normalizeGroupCode(candidate) === requestedGroupCode;
@@ -1000,10 +1153,27 @@ function getEvaluationEligibility(student, groupCode, evaluations, groups) {
   if (!foundGroup) {
     code = "missing-group";
     reason = "This project group could not be found.";
-  } else if (normalizeGroupCode(student.groupCode) === requestedGroupCode) {
+  } else if (evaluator.type === "student" && normalizeGroupCode(evaluator.groupCode) === requestedGroupCode) {
     code = "own-group";
     reason = "You cannot evaluate your own group.";
-  } else if (existing) {
+  } else if (evaluator.type === "faculty" && spreadsheet) {
+    const groupsSheet = getRequiredSheet(spreadsheet, "Groups");
+    const groupsData = getSheetData(groupsSheet);
+    const targetGroup = groupsData.find(function(g) {
+      return normalizeGroupCode(g.GroupCode) === requestedGroupCode;
+    });
+    if (targetGroup) {
+      const adviser = String(targetGroup.Adviser || "").trim().toLowerCase();
+      const facultyId = String(evaluator.facultyId || "").trim().toLowerCase();
+      const facultyName = String(evaluator.fullName || "").trim().toLowerCase();
+      if (adviser && (adviser === facultyId || adviser === facultyName)) {
+        code = "assigned-team";
+        reason = "Faculty advisers cannot evaluate groups assigned to them.";
+      }
+    }
+  }
+
+  if (code === "ok" && existing) {
     code = "duplicate";
     reason = "You have already evaluated this group.";
   }

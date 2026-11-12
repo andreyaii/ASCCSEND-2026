@@ -5,33 +5,97 @@ import { load, save, remove } from './mockStore.js';
 /**
  * Sends authentication request to Google Apps Script backend.
  */
-export async function login(identifier, password, role) {
-  const response = await request('login', {
-    method: 'POST',
-    body: {
-      identifier: identifier.trim(),
-      password: password.trim(),
-      role: role || 'Student'
-    }
-  });
+export const DEMO_ACCOUNTS = [
+  { label: 'Student', email: 'student@techcon.edu', password: 'techcon123' },
+  { label: 'Faculty Adviser', email: 'adviser@techcon.edu', password: 'techcon123' },
+  { label: 'Faculty Admin', email: 'admin@techcon.edu', password: 'techcon123' },
+  { label: 'Guest', email: 'guest@techcon.edu', password: 'guest' },
+];
 
-  if (!response.success || !response.user) {
-    throw new Error(
-      response.message || `Invalid ${role || 'account'} credentials.`
-    );
+/**
+ * Sends authentication request to Google Apps Script backend.
+ */
+export async function login(identifier, password, role) {
+  const normalizedRoleInput = (role || 'Student').trim().toLowerCase();
+  const isGuestRole = normalizedRoleInput === 'guest';
+
+  let response;
+  try {
+    response = await request('login', {
+      method: 'POST',
+      body: {
+        identifier: identifier.trim(),
+        password: password.trim(),
+        role: role || 'Student'
+      }
+    });
+  } catch (err) {
+    if (isGuestRole) {
+      // Allow guest login even if the remote Apps Script deployment hasn't been updated yet
+      const idLower = identifier.trim().toLowerCase();
+      const passTrim = password.trim();
+      const validGuestId = idLower === 'guest' || idLower === 'guest@techcon.edu' || idLower === 'guest-001';
+      const validGuestPass = passTrim === 'guest' || passTrim === 'techcon123' || passTrim === 'guest123';
+      if (validGuestId && validGuestPass) {
+        response = {
+          success: true,
+          user: {
+            GuestID: 'GUEST-001',
+            FullName: 'Guest User',
+            Role: 'Guest'
+          },
+          role: 'guest',
+          sessionToken: 'guest-session'
+        };
+      } else {
+        throw new Error('Invalid Guest credentials. You can use guest / guest.');
+      }
+    } else {
+      throw err;
+    }
+  }
+
+  if (!response || !response.success || !response.user) {
+    if (isGuestRole) {
+      const idLower = identifier.trim().toLowerCase();
+      const passTrim = password.trim();
+      const validGuestId = idLower === 'guest' || idLower === 'guest@techcon.edu' || idLower === 'guest-001';
+      const validGuestPass = passTrim === 'guest' || passTrim === 'techcon123' || passTrim === 'guest123';
+      if (validGuestId && validGuestPass) {
+        response = {
+          success: true,
+          user: {
+            GuestID: 'GUEST-001',
+            FullName: 'Guest User',
+            Role: 'Guest'
+          },
+          role: 'guest',
+          sessionToken: 'guest-session'
+        };
+      } else {
+        throw new Error('Invalid Guest credentials. You can use guest / guest.');
+      }
+    } else {
+      throw new Error(
+        response?.message || `Invalid ${role || 'account'} credentials.`
+      );
+    }
   }
 
   const user = response.user;
   const normalizedRole = (response.role || role || 'Student').toLowerCase();
 
+  const isGuest = normalizedRole === 'guest';
   const isFaculty =
-    normalizedRole === 'faculty' ||
-    normalizedRole === 'admin' ||
-    normalizedRole === 'adviser';
+    !isGuest &&
+    (normalizedRole === 'faculty' ||
+      normalizedRole === 'admin' ||
+      normalizedRole === 'adviser');
   const sessionToken = typeof response.sessionToken === 'string'
     ? response.sessionToken.trim()
-    : '';
-  if (!isFaculty && !sessionToken) {
+    : isGuest ? 'guest-session' : '';
+
+  if (!isFaculty && !isGuest && !sessionToken) {
     throw new Error('The server did not create an authenticated student session. Please try again.');
   }
 
@@ -40,8 +104,8 @@ export async function login(identifier, password, role) {
     ...user,
 
     // Common fields
-    id: user.StudentID || user.FacultyID || user.id,
-    name: user.FullName || user.name || user.NAME || '',
+    id: user.StudentID || user.FacultyID || user.GuestID || user.id || 'GUEST-001',
+    name: user.FullName || user.name || user.NAME || (isGuest ? 'Guest User' : ''),
     
     // Student fields
     groupId: user.GroupCode || user.groupId || '',
@@ -50,13 +114,15 @@ export async function login(identifier, password, role) {
     sec: user.Sec || user.sec || '',
 
     // Role fields
-    accountType: isFaculty ? 'Faculty' : 'Student',
+    accountType: isGuest ? 'Guest' : isFaculty ? 'Faculty' : 'Student',
     role:
-      normalizedRole === 'admin'
-        ? 'Admin'
-        : normalizedRole === 'adviser' || normalizedRole === 'faculty'
-          ? 'Adviser'
-          : 'Student'
+      isGuest
+        ? 'Guest'
+        : normalizedRole === 'admin'
+          ? 'Admin'
+          : normalizedRole === 'adviser' || normalizedRole === 'faculty'
+            ? 'Adviser'
+            : 'Student'
   };
 
   save('session', { user: sessionUser, sessionToken: sessionToken || null }, { replaceCorrupt: true });
