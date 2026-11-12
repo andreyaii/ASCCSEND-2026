@@ -105,11 +105,11 @@ export default function ProjectDetailPage() {
   return (
     <div className="space-y-6">
       {back}
-      <section className="overflow-hidden rounded-card border border-[#30303a] bg-[#0D0D12] text-white">
+      <section className="overflow-hidden rounded-card border border-line bg-surface text-ink">
         <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:p-6">
           {logoUrl && (
             <button type="button" onClick={() => setLogoPreviewUrl(logoUrl)}
-              className="flex h-28 w-28 shrink-0 items-center justify-center rounded-xl bg-white p-1.5 focus-visible:ring-offset-[#0D0D12] sm:h-32 sm:w-32"
+              className="flex h-28 w-28 shrink-0 items-center justify-center rounded-xl border border-line bg-[#fff] p-1.5 sm:h-32 sm:w-32"
               aria-label={`Preview ${project.title} logo`}>
               <img src={logoUrl} alt="" className="h-full w-full object-contain" />
             </button>
@@ -120,7 +120,7 @@ export default function ProjectDetailPage() {
               {isOwn && <span className="badge-primary">My Group</span>}
             </div>
             <h1 className="text-2xl font-bold leading-snug sm:text-3xl">{project.title}</h1>
-            <p className="max-w-4xl text-sm leading-6 text-gray-300">{project.description}</p>
+            <p className="max-w-4xl text-sm leading-6 text-muted">{project.description}</p>
           </div>
         </div>
       </section>
