@@ -380,12 +380,15 @@ function doPost(e) {
     if (action === "login") {
       const identifier = String(payload.identifier || "").trim();
       const password = String(payload.password || "").trim();
-      const role = String(payload.role || "").trim();
+      const requestedRole = String(payload.role || "").trim();
 
-      if (!identifier || !password || !role) {
+      if (!identifier || !password || !requestedRole) {
         throw new Error("Please provide your login credentials and role.");
       }
 
+      const role = requestedRole.toLowerCase() === "faculty" && identifier.toLowerCase() === "guest"
+        ? "Guest"
+        : requestedRole;
       const isGuest = role.toLowerCase() === "guest";
       const isFacultyOrAdmin =
         role.toLowerCase() === "faculty" ||

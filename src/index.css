@@ -178,6 +178,53 @@ html[data-theme='dark'] :focus-visible {
   background-color: #e64d00;
 }
 
+.techcon-flight-loader {
+  display: block;
+  width: 8rem;
+  height: 8rem;
+  overflow: visible;
+  animation: techcon-flight-orbit 3.2s linear infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.techcon-flight-trail {
+  fill: none;
+  stroke: rgb(var(--color-primary) / 55%);
+  stroke-dasharray: 4 6;
+  stroke-linecap: round;
+  stroke-width: 1.5;
+  -webkit-mask-image: conic-gradient(
+    from 0deg at 50% 50%,
+    transparent 0deg 60deg,
+    rgb(0 0 0 / 25%) 36deg,
+    #000 54deg 300deg,
+    rgb(0 0 0 / 80%) 310deg,
+    #000 318deg,
+    rgb(0 0 0 / 45%) 326deg,
+    transparent 337deg 360deg
+  );
+  mask-image: conic-gradient(
+    from 0deg at 50% 50%,
+    transparent 0deg 60deg,
+    rgb(0 0 0 / 25%) 36deg,
+    #000 54deg 300deg,
+    rgb(0 0 0 / 80%) 310deg,
+    #000 318deg,
+    rgb(0 0 0 / 45%) 326deg,
+    transparent 337deg 360deg
+  );
+}
+
+.techcon-paper-plane {
+  overflow: visible;
+  filter: drop-shadow(0 1px 1.5px rgb(32 41 56 / 20%));
+}
+
+@keyframes techcon-flight-orbit {
+  to { transform: rotate(360deg); }
+}
+
 @layer components {
   .card { @apply rounded-card border border-line bg-white shadow-card; }
   .btn { @apply inline-flex min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-semibold transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50; }

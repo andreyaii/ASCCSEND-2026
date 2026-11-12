@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useAsync } from '../../hooks/useAsync';
 import { getProjects } from '../../services/projectService';
 import { getAggregates } from '../../services/evaluationService';
+import { isProjectAssignedToFaculty } from '../../utils/faculty';
 
 import { isGuest } from '../../utils/roles';
 
@@ -31,13 +32,7 @@ export default function AllProjectsPage() {
         linkFor={(p) => guest ? `/guest/projects/${p.id}` : `/faculty/projects/${p.id}`}
         badgeFor={(p) => {
           if (guest) return null;
-          const isAssigned = user?.assignedGroupIds?.includes(p.groupId) ||
-            (p.facultyId && (
-              p.facultyId.toLowerCase() === user?.id?.toLowerCase() ||
-              p.facultyId.toLowerCase() === user?.name?.toLowerCase() ||
-              p.facultyId.toLowerCase() === user?.facultyId?.toLowerCase()
-            ));
-          return isAssigned ? <span className="badge-primary">My Team</span> : null;
+          return isProjectAssignedToFaculty(p, user) ? <span className="badge-primary">My Team</span> : null;
         }} />
     </>
   );

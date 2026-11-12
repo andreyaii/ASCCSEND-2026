@@ -2,6 +2,7 @@ import { faculty } from '../data/faculty';
 import { delay } from './mockStore';
 import { getProjects } from './projectService';
 import { getCurrentUser } from './authService';
+import { normalizeIdentity } from '../utils/faculty.js';
 
 export async function getFacultyById(id) {
   await delay(50);
@@ -11,13 +12,13 @@ export async function getFacultyById(id) {
 // Groups assigned to a faculty member (used by My Teams and evaluation eligibility).
 export async function getAssignedGroupIds(facultyId) {
   const currentUser = getCurrentUser();
-  const searchId = String(facultyId || currentUser?.id || currentUser?.facultyId || '').trim().toLowerCase();
-  const searchName = String(currentUser?.name || '').trim().toLowerCase();
+  const searchId = normalizeIdentity(facultyId || currentUser?.id || currentUser?.facultyId);
+  const searchName = normalizeIdentity(currentUser?.name);
 
   try {
     const projects = await getProjects();
     const matching = projects.filter((p) => {
-      const fId = String(p.facultyId || '').trim().toLowerCase();
+      const fId = normalizeIdentity(p.facultyId);
       return fId && (fId === searchId || fId === searchName);
     });
     const fromProjects = matching.map((p) => p.groupId);

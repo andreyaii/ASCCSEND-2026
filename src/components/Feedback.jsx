@@ -1,9 +1,17 @@
-import { Loader2, SearchX, AlertTriangle } from 'lucide-react';
+import { SearchX, AlertTriangle } from 'lucide-react';
 
-export function Loading({ label = 'Loading…' }) {
+export function Loading({ label = 'Getting things ready…', fullScreen = false }) {
   return (
-    <div className="flex min-h-[60vh] items-center justify-center gap-2 py-20 text-sm text-muted" role="status">
-      <Loader2 className="h-5 w-5 animate-spin text-primary" /> {label}
+    <div
+      className={`flex items-center justify-center py-16 ${fullScreen ? 'min-h-screen' : 'min-h-[calc(100vh-9.5rem)] lg:min-h-[calc(100vh-4rem)]'}`}
+      role="status"
+      aria-label={label}
+      aria-live="polite"
+    >
+      <svg className="techcon-flight-loader" viewBox="0 0 120 120" aria-hidden="true">
+        <circle className="techcon-flight-trail" cx="60" cy="60" r="42" />
+        <image className="techcon-paper-plane" href="/airplane.png" x="40" y="-2" width="40" height="40" />
+      </svg>
     </div>
   );
 }

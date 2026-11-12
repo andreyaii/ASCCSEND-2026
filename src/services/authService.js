@@ -17,7 +17,9 @@ export const DEMO_ACCOUNTS = [
  */
 export async function login(identifier, password, role) {
   const normalizedRoleInput = (role || 'Student').trim().toLowerCase();
-  const isGuestRole = normalizedRoleInput === 'guest';
+  const isGuestIdentifier = normalizedRoleInput === 'faculty'
+    && identifier.trim().toLowerCase() === 'guest';
+  const isGuestRole = normalizedRoleInput === 'guest' || isGuestIdentifier;
 
   let response;
   try {

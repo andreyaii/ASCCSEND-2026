@@ -29,12 +29,11 @@ export default function ProfilePage() {
       <section className="card p-6">
         <div className="mb-5 flex items-center gap-4">
           <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-light text-lg font-bold text-primary">{user.name.split(' ').map((p) => p[0]).slice(0, 2).join('')}</span>
-          <div><h2 className="text-lg font-bold">{user.name}</h2><p className="text-sm text-muted">{user.email}</p></div>
+          <div><h2 className="text-lg font-bold">{user.name}</h2></div>
         </div>
         <dl className="grid gap-4 sm:grid-cols-2">
           <Field label="Name">{user.name}</Field>
           <Field label={student ? 'Student ID' : 'Faculty ID'}>{student ? user.studentNo : user.facultyId}</Field>
-          <Field label="Email">{user.email}</Field>
           <Field label="Account type">{user.accountType}</Field>
           {!student && <Field label="Faculty role">{user.role}</Field>}
           {student && (

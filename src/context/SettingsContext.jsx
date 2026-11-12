@@ -45,7 +45,7 @@ export function SettingsProvider({ children }) {
   );
 
   if (error) return <ErrorState error={error} onRetry={refresh} />;
-  if (!settings) return <Loading label="Loading settings…" />;
+  if (!settings) return <Loading label="Loading settings…" fullScreen />;
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }
 

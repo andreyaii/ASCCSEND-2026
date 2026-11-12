@@ -20,9 +20,9 @@ Date: 2026-11-12
   * Normalized user fields: `accountType: 'Guest'`, `role: 'Guest'`.
   * Added fallback guest credentials (`guest` / `guest`, `guest@techcon.edu` / `techcon123`).
   * Added Guest entry to `DEMO_ACCOUNTS`.
-- Added Guest tab and quick login support in `src/pages/LoginPage.jsx`:
-  * Added 'Guest' tab to role list `['Student', 'Faculty', 'Guest']`.
-  * Auto-prefills `guest` / `guest` when clicking Guest tab for seamless access.
+- Guest login uses the Faculty tab in `src/pages/LoginPage.jsx`:
+  * The login page displays only Student and Faculty tabs.
+  * Entering `Guest` (case-insensitive) as the Faculty identifier routes authentication through the backend guest account flow.
 - Enforced Guest restrictions on Project Detail (`src/pages/shared/ProjectDetailPage.jsx`):
   * Guests cannot evaluate or comment (evaluation box is completely hidden).
   * Guests cannot view received evaluations.
@@ -79,11 +79,12 @@ Frontend:
 - `src/layouts/AppLayout.jsx`: Added guest nav support, removed RatingsAdminControl.
 - `src/components/RatingsAdminControl.jsx`: Emptied / returns null.
 - `src/components/DemoPanel.jsx`: Removed results published toggle.
-- `src/pages/LoginPage.jsx`: Added Guest tab, placeholder, and auto-prefill.
-- `src/services/authService.js`: Added guest login handling and session normalization.
+- `src/pages/LoginPage.jsx`: Displays only Student and Faculty tabs; accepts Guest as a Faculty identifier.
+- `src/services/authService.js`: Handles guest login fallback and session normalization when Guest is entered under Faculty.
 - `src/pages/shared/ProjectDetailPage.jsx`: Added evaluate box for faculty with disabled state for assigned groups; guest view restrictions.
-- `src/pages/faculty/AllProjectsPage.jsx`: Added guest navigation support and dynamic assigned team badge.
-- `src/services/facultyService.js`: Updated getAssignedGroupIds to match against project list from getProjects().
+- `src/pages/faculty/AllProjectsPage.jsx`: Added guest navigation support and dynamic assigned team badge; badge matching safely handles numeric IDs.
+- `src/services/facultyService.js`: Updated getAssignedGroupIds to match against project list from getProjects(), using normalized identity values.
+- `src/utils/faculty.js`: Added shared, type-safe faculty/project assignment matching.
 - `src/services/evaluationAssignment.js`: Added faculty assigned team check and guest blocking.
 - `src/services/evaluationService.js`: Added faculty eligibility and submission handling, guest blocking.
 - `src/pages/student/EvaluatePage.jsx`: Supported faculty evaluator navigation and completion.
@@ -96,7 +97,7 @@ Backend (Google Apps Script):
   * Added `createFacultySession`, `createGuestSession`, `getAuthenticatedEvaluator`, and updated `getEvaluationEligibility`.
 
 Tests:
-- `tests/core.test.js`: Added 3 new test suites covering Guest role, Rating visibility, and Faculty Adviser rating restrictions. Total 20/20 tests passing.
+- `tests/core.test.js`: Covers Guest role, Rating visibility, Faculty Adviser rating restrictions, and numeric faculty/project IDs. Total 21/21 tests passing.
 
 --------------------------------------------------------------------------------
 3. STEPS TO DEPLOY GOOGLE APPS SCRIPT (IF USING REMOTE BACKEND)
@@ -109,7 +110,6 @@ Note: Even before redeploying, the frontend contains local fallback handlers for
 --------------------------------------------------------------------------------
 4. VERIFICATION PERFORMED
 --------------------------------------------------------------------------------
-- Unit tests: Ran `npm test` -> 20 passing tests, 0 failures.
+- Unit tests: Ran `npm test` -> 22 passing tests, 0 failures.
 - Production build: Ran `npm run build` -> Vite production build succeeded with 0 errors.
 ================================================================================
-

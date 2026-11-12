@@ -9,6 +9,7 @@ import { students } from '../src/data/students.js';
 import { groups } from '../src/data/groups.js';
 import { calcOverall } from '../src/utils/ratings.js';
 import { getProjectLogoUrl } from '../src/utils/projectLogo.js';
+import { isProjectAssignedToFaculty } from '../src/utils/faculty.js';
 import { isGuest, isFaculty, isStudent, isAdmin, canViewRatings, canToggleRatings, homePathFor, basePathFor, ratingsHiddenReason } from '../src/utils/roles.js';
 import { guestNav } from '../src/config/navigation.js';
 import { login } from '../src/services/authService.js';
@@ -357,6 +358,26 @@ test('guest role restricts access to all-projects and blocks evaluations and rat
   );
 });
 
+test('Faculty login with Guest as the identifier is handled as a guest account', async () => {
+  let requestBody;
+  globalThis.fetch = async (_url, options) => {
+    requestBody = JSON.parse(options.body);
+    assert.equal(requestBody.role, 'Faculty');
+    return response({
+      success: true,
+      role: 'guest',
+      sessionToken: 'guest-session',
+      user: { GuestID: 'GUEST-001', FullName: 'Guest User', Role: 'Guest' },
+    });
+  };
+
+  const user = await login('Guest', 'guest', 'Faculty');
+
+  assert.equal(user.accountType, 'Guest');
+  assert.equal(user.role, 'Guest');
+  assert.equal(user.id, 'GUEST-001');
+});
+
 test('rating visibility is strictly limited to faculty admins', () => {
   const student = { id: 's1', accountType: 'Student', role: 'Student' };
   const adviser = { id: 'f1', accountType: 'Faculty', role: 'Adviser' };
@@ -405,6 +426,31 @@ test('faculty advisers cannot rate their assigned groups but can rate other grou
     ratings: validRatings,
     comments: 'Great presentation',
   });
+
   assert.equal(result.evaluatedGroupId, 'g4');
   assert.equal(result.overallScore, 4);
+});
+
+test('faculty project assignment badges compare string and numeric IDs safely', () => {
+  assert.equal(
+    isProjectAssignedToFaculty(
+      { groupId: 'GROUP-1', facultyId: 1001 },
+      { id: 1001, assignedGroupIds: [] },
+    ),
+    true,
+  );
+  assert.equal(
+    isProjectAssignedToFaculty(
+      { groupId: 1002, facultyId: 'Other Adviser' },
+      { id: 'FAC-001', name: 'Prof. Current', assignedGroupIds: ['1002'] },
+    ),
+    true,
+  );
+  assert.equal(
+    isProjectAssignedToFaculty(
+      { groupId: 'GROUP-2', facultyId: 1002 },
+      { id: 1001, name: 'Prof. Current', assignedGroupIds: [] },
+    ),
+    false,
+  );
 });

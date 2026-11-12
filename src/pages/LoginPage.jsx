@@ -13,16 +13,14 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { homePathFor } from '../utils/roles';
 
-const roles = ['Student', 'Faculty', 'Guest'];
+const roles = ['Student', 'Faculty'];
 const identifierLabels = {
   Student: 'Student ID / Student No.',
   Faculty: 'Faculty ID / Institutional Email',
-  Guest: 'Guest Username / Email',
 };
 const identifierPlaceholders = {
   Student: 'Enter your Student ID or Student No.',
-  Faculty: 'Faculty ID or name@cit.edu',
-  Guest: 'guest (or guest@techcon.edu)',
+  Faculty: 'Faculty ID, institutional email, or Guest',
 };
 
 export default function LoginPage() {
@@ -133,17 +131,7 @@ export default function LoginPage() {
                   aria-selected={role === item}
                   aria-controls="login-form-panel"
                   className={`login-role-tab${role === item ? ' is-active' : ''}`}
-                  onClick={() => {
-                    setRole(item);
-                    setError('');
-                    if (item === 'Guest') {
-                      if (!identifier) setIdentifier('guest');
-                      if (!password) setPassword('guest');
-                    } else if (identifier === 'guest') {
-                      setIdentifier('');
-                      setPassword('');
-                    }
-                  }}
+                  onClick={() => { setRole(item); setError(''); }}
                 >
                   {item}
                 </button>
