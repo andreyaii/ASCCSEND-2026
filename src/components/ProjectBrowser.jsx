@@ -5,7 +5,7 @@ import { EmptyState } from './Feedback';
 import { useSettings } from '../context/SettingsContext';
 
 // Search + category filter + sort over project cards. Shared by Explore and All Projects.
-export default function ProjectBrowser({ projects, aggregates = {}, linkFor, badgeFor }) {
+export default function ProjectBrowser({ projects, aggregates = {}, linkFor, badgeFor, fullCardLink = false }) {
   const { ratingsShown } = useSettings();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
@@ -65,7 +65,7 @@ export default function ProjectBrowser({ projects, aggregates = {}, linkFor, bad
         {visible.length === 0 ? (
           <EmptyState title="No projects found" message="Try a different search term or category." />
         ) : visible.map((p) => (
-          <ProjectCard key={p.id} project={p} to={linkFor(p)} aggregate={aggregates[p.groupId]} badge={badgeFor?.(p)} />
+          <ProjectCard key={p.id} project={p} to={linkFor(p)} aggregate={aggregates[p.groupId]} badge={badgeFor?.(p)} fullCardLink={fullCardLink} />
         ))}
       </div>
     </>

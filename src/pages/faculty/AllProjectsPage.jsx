@@ -24,6 +24,7 @@ export default function AllProjectsPage() {
     <>
       <PageHeader title="All Projects" subtitle="All registered groups and their projects." />
       <ProjectBrowser projects={data.projects} aggregates={data.aggregates}
+        fullCardLink
         linkFor={(p) => `/faculty/projects/${p.id}`}
         badgeFor={(p) => user.assignedGroupIds?.includes(p.groupId) && <span className="badge-primary">My Team</span>} />
     </>

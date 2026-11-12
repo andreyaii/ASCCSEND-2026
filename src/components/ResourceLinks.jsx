@@ -1,4 +1,5 @@
-import { FileText, PlayCircle, BookOpen, ExternalLink } from 'lucide-react';
+import { FileText, PlayCircle, BookOpen, ExternalLink, Image } from 'lucide-react';
+import { getProjectLogoUrl } from '../utils/projectLogo';
 
 // Three separate resources: Proposal, Pitch Video, Documentation.
 const items = [
@@ -7,9 +8,16 @@ const items = [
   { key: 'documentationLink', legacyKey: 'documentationUrl', label: 'Poster', icon: BookOpen },
 ];
 
-export default function ResourceLinks({ project }) {
+export default function ResourceLinks({ project, onLogoClick }) {
+  const logoUrl = getProjectLogoUrl(project);
+
   return (
     <div className="flex flex-wrap gap-2">
+      {logoUrl && onLogoClick && (
+        <button type="button" onClick={() => onLogoClick(logoUrl)} className="btn-secondary">
+          <Image className="h-4 w-4" /> Project logo
+        </button>
+      )}
       {items.map(({ key, legacyKey, label, icon: Icon }) => {
         const resource = project?.[key] || project?.[legacyKey];
         let safeUrl = null;

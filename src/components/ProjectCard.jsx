@@ -2,9 +2,9 @@ import { Link } from 'react-router-dom';
 import ProjectThumb from './ProjectThumb';
 import RatingSummary from './RatingSummary';
 
-export default function ProjectCard({ project, to, aggregate, badge }) {
-  return (
-    <article className="card group flex flex-col overflow-hidden transition-shadow hover:shadow-lift">
+export default function ProjectCard({ project, to, aggregate, badge, fullCardLink = false }) {
+  const card = (
+    <article className="card group flex h-full flex-col overflow-hidden transition-shadow hover:shadow-lift">
       <ProjectThumb project={project} />
       <div className="flex flex-1 flex-col p-5">
         <div className="mb-1 flex items-center justify-between gap-2">
@@ -16,8 +16,14 @@ export default function ProjectCard({ project, to, aggregate, badge }) {
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-3.5">
         <RatingSummary aggregate={aggregate} />
-        <Link to={to} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">View project</Link>
+        {!fullCardLink && <Link to={to} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">View project</Link>}
       </div>
     </article>
   );
+
+  return fullCardLink ? (
+    <Link to={to} className="block h-full text-inherit no-underline focus-visible:rounded-card">
+      {card}
+    </Link>
+  ) : card;
 }

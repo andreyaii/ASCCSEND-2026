@@ -39,6 +39,7 @@ export default function ExplorePage() {
       </div>
       <div className="mb-5"><EvaluationCounter status={data.status} /></div>
       <ProjectBrowser projects={data.projects} aggregates={data.aggregates}
+        fullCardLink
         linkFor={(p) => `/student/projects/${p.id}`}
         badgeFor={(p) => data.evaluatedGroupIds.has(p.groupId) && <span className="badge-green">Evaluated</span>} />
     </>

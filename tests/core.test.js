@@ -8,6 +8,7 @@ import { load, save } from '../src/services/mockStore.js';
 import { students } from '../src/data/students.js';
 import { groups } from '../src/data/groups.js';
 import { calcOverall } from '../src/utils/ratings.js';
+import { getProjectLogoUrl } from '../src/utils/projectLogo.js';
 
 const entries = new Map();
 let apiEvaluations;
@@ -19,6 +20,14 @@ const validRatings = { c1: 4, c2: 5, c3: 3 };
 const response = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
   headers: { 'Content-Type': 'application/json' },
+});
+
+test('project logo URLs preserve the working Drive thumbnail URL', () => {
+  assert.equal(
+    getProjectLogoUrl({ thumbnail: 'https://drive.google.com/thumbnail?id=logo-file&sz=w1200&v=123' }),
+    'https://drive.google.com/thumbnail?id=logo-file&sz=w1200&v=123',
+  );
+  assert.equal(getProjectLogoUrl({ imageUrl: 'javascript:alert(1)' }), '');
 });
 
 globalThis.window = {

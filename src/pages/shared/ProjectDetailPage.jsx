@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
+import { useState } from 'react';
 import { ArrowLeft, CheckCircle2, Lock } from 'lucide-react';
-import ProjectThumb from '../../components/ProjectThumb';
+import Modal from '../../components/Modal';
 import MemberList from '../../components/MemberList';
 import ResourceLinks from '../../components/ResourceLinks';
 import RatingSummary from '../../components/RatingSummary';
@@ -13,6 +14,7 @@ import { getProjectById } from '../../services/projectService';
 import { getAggregates, getEligibility, getEvaluationsForGroup } from '../../services/evaluationService';
 import { isStudent, basePathFor } from '../../utils/roles';
 import { formatDate, formatScore } from '../../utils/ratings';
+import { getProjectLogoUrl } from '../../utils/projectLogo';
 
 function StudentEvaluateBox({ eligibility, status, projectId }) {
   if (eligibility.code === 'duplicate') {
@@ -65,6 +67,7 @@ function ReceivedEvaluations({ evaluations }) {
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
   const { user } = useAuth();
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState('');
   const student = isStudent(user);
   const base = basePathFor(user);
 
@@ -97,25 +100,34 @@ export default function ProjectDetailPage() {
   if (!project) return <>{back}<EmptyState title="Project not found" message="This project does not exist or was removed." /></>;
 
   const isOwn = student && project.groupId === user.groupId;
+  const logoUrl = getProjectLogoUrl(project);
 
   return (
     <div className="space-y-6">
       {back}
-      <section className="overflow-hidden rounded-card border border-line bg-white">
-        <ProjectThumb project={project} className="max-h-64" />
-        <div className="space-y-2 p-5 sm:p-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold text-primary">{project.group?.groupName || 'Group information unavailable'}</p>
-            {isOwn && <span className="badge-primary">My Group</span>}
+      <section className="overflow-hidden rounded-card border border-[#30303a] bg-[#0D0D12] text-white">
+        <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:p-6">
+          {logoUrl && (
+            <button type="button" onClick={() => setLogoPreviewUrl(logoUrl)}
+              className="flex h-28 w-28 shrink-0 items-center justify-center rounded-xl bg-white p-1.5 focus-visible:ring-offset-[#0D0D12] sm:h-32 sm:w-32"
+              aria-label={`Preview ${project.title} logo`}>
+              <img src={logoUrl} alt="" className="h-full w-full object-contain" />
+            </button>
+          )}
+          <div className="min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold text-primary">{project.group?.groupName || 'Group information unavailable'}</p>
+              {isOwn && <span className="badge-primary">My Group</span>}
+            </div>
+            <h1 className="text-2xl font-bold leading-snug sm:text-3xl">{project.title}</h1>
+            <p className="max-w-4xl text-sm leading-6 text-gray-300">{project.description}</p>
           </div>
-          <h1 className="text-2xl font-bold leading-snug sm:text-3xl">{project.title}</h1>
-          <p className="max-w-4xl text-sm leading-6 text-muted">{project.description}</p>
         </div>
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="card space-y-3 p-5 sm:p-6"><h2 className="text-lg font-bold">Team members</h2><MemberList members={project.group?.members || []} /></section>
-        <section className="card space-y-3 p-5 sm:p-6"><h2 className="text-lg font-bold">Project resources</h2><ResourceLinks project={project} /></section>
+        <section className="card space-y-3 p-5 sm:p-6"><h2 className="text-lg font-bold">Project resources</h2><ResourceLinks project={project} onLogoClick={setLogoPreviewUrl} /></section>
       </div>
 
       <section className="card space-y-3 p-5 sm:p-6"><h2 className="text-lg font-bold">Rating</h2><RatingSummary aggregate={aggregate} variant="full" /></section>
@@ -127,6 +139,11 @@ export default function ProjectDetailPage() {
         </section>
       )}
       {!student && <ReceivedEvaluations evaluations={received} />}
+      <Modal open={Boolean(logoPreviewUrl)} title={`${project.title} logo`} onClose={() => setLogoPreviewUrl('')} size="wide">
+        <div className="flex max-h-[70vh] min-h-48 items-center justify-center rounded-xl bg-[#0D0D12] p-4">
+          <img src={logoPreviewUrl} alt={`${project.title} logo`} className="max-h-[65vh] max-w-full object-contain" />
+        </div>
+      </Modal>
     </div>
   );
 }

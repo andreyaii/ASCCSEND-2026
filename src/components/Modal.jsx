@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
-export default function Modal({ open, title, onClose, children, footer }) {
+export default function Modal({ open, title, onClose, children, footer, size = 'default' }) {
   const dialogRef = useRef(null);
 
   useEffect(() => {
@@ -40,7 +40,7 @@ export default function Modal({ open, title, onClose, children, footer }) {
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center bg-[rgba(15,15,35,.45)] p-4 backdrop-blur-sm" onClick={onClose}>
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="modal-title" onClick={(e) => e.stopPropagation()}
-        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[18px] bg-white p-6 shadow-lift sm:p-8">
+        className={`max-h-[90vh] w-full ${size === 'wide' ? 'max-w-[min(96vw,1200px)]' : 'max-w-md'} overflow-y-auto rounded-[18px] bg-white p-6 shadow-lift sm:p-8`}>
         <div className="mb-4 flex items-center justify-between gap-4">
           <h2 id="modal-title" className="text-xl font-bold">{title}</h2>
           <button onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-muted hover:bg-surface"><X className="h-5 w-5" /></button>
