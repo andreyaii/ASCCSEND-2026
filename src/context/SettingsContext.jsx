@@ -40,8 +40,8 @@ export function SettingsProvider({ children }) {
     [settings, user, refresh]
   );
 
-  if (error) return <ErrorState error={error} onRetry={refresh} />;
-  if (!settings) return <Loading label="Loading settings…" fullScreen />;
+  if (user && error) return <ErrorState error={error} onRetry={refresh} />;
+  if (user && !settings) return <Loading label="Loading settings…" fullScreen />;
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }
 
