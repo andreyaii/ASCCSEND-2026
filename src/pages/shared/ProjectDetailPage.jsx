@@ -79,7 +79,7 @@ export default function ProjectDetailPage() {
     const project = await getProjectById(projectId, { refresh: force });
     if (!project) return { project: null };
     const [aggregates, eligibility, received] = await Promise.all([
-      getAggregates(),
+      getAggregates(user),
       !guest ? getEligibility(user.id, project.groupId) : null,
       faculty ? getEvaluationsForGroup(project.groupId, user) : [],
     ]);

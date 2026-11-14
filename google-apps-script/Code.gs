@@ -244,9 +244,40 @@ function doGet(e) {
 
     const spreadsheet = getSpreadsheet();
 
+    if (action === "getRatingAnalytics") {
+      getAuthenticatedAdmin(e.parameter.sessionToken);
+      const evalSheet = getRequiredSheet(spreadsheet, "Evaluations");
+      return responseJSON({
+        success: true,
+        data: {
+          evaluations: getRatingAnalyticsRows(
+            spreadsheet,
+            getEvaluationRows(evalSheet)
+          )
+        }
+      });
+    }
+
+    if (action === "getFacultyEvaluationData") {
+      const evaluator = getAuthenticatedFacultyForEvaluationHistory(
+        spreadsheet,
+        e.parameter.sessionToken
+      );
+      const evaluations = getEvaluationRows(
+        getRequiredSheet(spreadsheet, "Evaluations")
+      ).filter(function(evaluation) {
+        return String(evaluation.StudentID || "").trim() === evaluator.facultyId;
+      });
+      return responseJSON({
+        success: true,
+        data: { evaluations: evaluations }
+      });
+    }
+
     if (
       action === "getMyEvaluations" ||
       action === "getEvaluations" ||
+      action === "getEvaluationsForGroup" ||
       action === "getStudentEvaluationData" ||
       action === "getEvaluationStatus" ||
       action === "getEvaluationEligibility"
@@ -265,9 +296,33 @@ function doGet(e) {
 
       const evalSheet = getRequiredSheet(spreadsheet, "Evaluations");
       const evaluatorId = evaluator.type === "student" ? evaluator.studentId : evaluator.facultyId;
-      const evaluations = getEvaluationRows(evalSheet).filter(function(evaluation) {
+      const allEvaluations = getEvaluationRows(evalSheet);
+      const evaluations = allEvaluations.filter(function(evaluation) {
         return String(evaluation.StudentID || "").trim() === evaluatorId;
       });
+
+      if (action === "getEvaluationsForGroup") {
+        if (evaluator.type !== "faculty") {
+          throw new Error("Only signed-in faculty can view received evaluation details.");
+        }
+        const groupCode = normalizeGroupCode(e.parameter.groupCode);
+        if (!groupCode) {
+          throw new Error("Group Code is required.");
+        }
+        const groupEvaluations = allEvaluations.filter(function(evaluation) {
+          return normalizeGroupCode(evaluation.GroupCode) === groupCode;
+        });
+        return responseJSON({
+          success: true,
+          data: getRatingAnalyticsRows(spreadsheet, groupEvaluations).map(function(evaluation, index) {
+            return {
+              ...evaluation,
+              Comment: groupEvaluations[index].Comment
+            };
+          })
+        });
+      }
+
       const groups = action === "getEvaluationEligibility"
         ? getGroupCodes(spreadsheet)
         : null;
@@ -980,13 +1035,14 @@ function createStudentSession(studentId) {
 }
 
 function createFacultySession(facultyId, role) {
-  if (!facultyId) {
+  const normalizedFacultyId = String(facultyId || "").trim();
+  if (!normalizedFacultyId) {
     throw new Error("The authenticated faculty does not have a FacultyID.");
   }
   const sessionToken = Utilities.getUuid();
   CacheService.getScriptCache().put(
     "faculty-session:" + sessionToken,
-    JSON.stringify({ facultyId: facultyId, role: role }),
+    JSON.stringify({ facultyId: normalizedFacultyId, role: role }),
     21600
   );
   return sessionToken;
@@ -1000,6 +1056,65 @@ function createGuestSession(guestId) {
     21600
   );
   return sessionToken;
+}
+
+function getAuthenticatedAdmin(sessionToken) {
+  const token = String(sessionToken || "").trim();
+  if (!token) {
+    throw new Error("A valid session is required. Please sign in again.");
+  }
+
+  const sessionData = CacheService.getScriptCache().get(
+    "faculty-session:" + token
+  );
+  if (!sessionData) {
+    throw new Error("Your session has expired. Please sign in again.");
+  }
+
+  let session;
+  try {
+    session = JSON.parse(sessionData);
+  } catch (error) {
+    throw new Error("Your faculty session is invalid. Please sign in again.");
+  }
+
+  if (
+    !String(session.facultyId || "").trim() ||
+    normalizeFacultyRole(session.role) !== "admin"
+  ) {
+    throw new Error("Only faculty administrators can view rating analytics.");
+  }
+  return {
+    type: "faculty",
+    facultyId: String(session.facultyId).trim(),
+    role: "admin"
+  };
+}
+
+function getAuthenticatedFacultyForEvaluationHistory(spreadsheet, sessionToken) {
+  const token = String(sessionToken || "").trim();
+  const sessionData = token
+    ? CacheService.getScriptCache().get("faculty-session:" + token)
+    : null;
+  if (!sessionData) {
+    throw new Error("A valid faculty session is required. Please sign in again.");
+  }
+
+  let session;
+  try {
+    session = JSON.parse(sessionData);
+  } catch (error) {
+    throw new Error("Your faculty session is invalid. Please sign in again.");
+  }
+  if (normalizeFacultyRole(session.role) === "admin") {
+    return getAuthenticatedAdmin(token);
+  }
+
+  const evaluator = getAuthenticatedEvaluator(spreadsheet, token);
+  if (evaluator.type !== "faculty") {
+    throw new Error("Only signed-in faculty can view their evaluations.");
+  }
+  return evaluator;
 }
 
 function getAuthenticatedEvaluator(spreadsheet, sessionToken) {
@@ -1025,8 +1140,12 @@ function getAuthenticatedEvaluator(spreadsheet, sessionToken) {
     }
     const facultySheet = getRequiredSheet(spreadsheet, "Faculty");
     const facultyMembers = getSheetData(facultySheet);
+    const sessionFacultyId = String(parsed.facultyId || "").trim();
+    if (!sessionFacultyId) {
+      throw new Error("Your faculty session is invalid. Please sign in again.");
+    }
     const member = facultyMembers.find(function(f) {
-      return String(f.FacultyID || "").trim() === parsed.facultyId;
+      return String(f.FacultyID || "").trim() === sessionFacultyId;
     });
     if (!member) {
       throw new Error("The faculty account for this session could not be found.");
@@ -1117,6 +1236,40 @@ function getEvaluationRows(sheet) {
     );
   }
   return getSheetData(sheet);
+}
+
+function getRatingAnalyticsRows(spreadsheet, evaluations) {
+  const students = getSheetData(getRequiredSheet(spreadsheet, "Students"));
+  const faculty = getSheetData(getRequiredSheet(spreadsheet, "Faculty"));
+  const studentIds = new Set(students.map(function(student) {
+    return String(getStudentField(student, [
+      "student no.",
+      "student number",
+      "student id",
+      "member #",
+      "member number"
+    ]) || "").trim();
+  }).filter(Boolean));
+  const facultyIds = new Set(faculty.map(function(member) {
+    return String(getStudentField(member, ["faculty id", "facultyid"]) || "").trim();
+  }).filter(Boolean));
+
+  return evaluations.map(function(evaluation) {
+    const evaluatorId = String(evaluation.StudentID || "").trim();
+    const evaluatorType = studentIds.has(evaluatorId)
+      ? "student"
+      : facultyIds.has(evaluatorId) ? "faculty" : "unknown";
+    return {
+      EvaluationID: evaluation.EvaluationID,
+      StudentID: evaluatorId,
+      GroupCode: evaluation.GroupCode,
+      ProposalRating: evaluation.ProposalRating,
+      PitchVideoRating: evaluation.PitchVideoRating,
+      PosterRating: evaluation.PosterRating,
+      SubmittedAt: evaluation.SubmittedAt,
+      EvaluatorType: evaluatorType
+    };
+  });
 }
 
 function validateRating(value) {

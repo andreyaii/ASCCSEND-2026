@@ -2,6 +2,7 @@ import PageHeader from '../../components/PageHeader';
 import { Loading, ErrorState } from '../../components/Feedback';
 import { useAuth } from '../../context/AuthContext';
 import { useAsync } from '../../hooks/useAsync';
+import { getAssignedGroupIds } from '../../services/facultyService';
 import { getProjectByGroupId } from '../../services/projectService';
 import { isStudent } from '../../utils/roles';
 
@@ -15,7 +16,9 @@ export default function ProfilePage() {
   const { data, loading, error, reload } = useAsync(
     async (force) => (student ? {
       project: await getProjectByGroupId(user.groupId, { refresh: force }),
-    } : {}),
+    } : {
+      assignedGroupIds: await getAssignedGroupIds(user.facultyId || user.id),
+    }),
     [user.id],
     `profile:${user.id}`,
   );
@@ -41,7 +44,7 @@ export default function ProfilePage() {
     {user.GroupCode || '–'}
   </Field>
 )}          {student && <Field label="Project">{data.project?.title ?? '–'}</Field>}
-          {!student && <Field label="Assigned groups">{user.assignedGroupIds?.length ?? 0}</Field>}
+          {!student && <Field label="Assigned groups">{data.assignedGroupIds.length}</Field>}
         </dl>
       </section>
     </>

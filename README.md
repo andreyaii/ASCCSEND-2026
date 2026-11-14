@@ -2,7 +2,7 @@
 
 ## App overview
 
-The application is a React/Vite app. Authentication and project listing use the Google Apps Script endpoint configured in `src/config/apiConfig.js`. Student evaluation eligibility, submission, history, and status also use that backend; remaining demo settings, aggregates, and some faculty views still use seeded records and browser `localStorage`.
+The application is a React/Vite app. Authentication, project listing, evaluation submission and history, faculty group evaluation details, Admin rating analytics, and evaluation settings use the Google Apps Script endpoint configured in `src/config/apiConfig.js`. Ratings, aggregates, and adjustable evaluation settings are read from Google Sheets.
 
 Install the existing dependencies and start the app:
 
@@ -18,7 +18,7 @@ npm run build
 npm test
 ```
 
-The administrator publication and reset controls are development-only demo features. Results publication and rating visibility change display settings only and do not delete evaluation records.
+Development demo/reset controls and unused sample-data paths have been removed. Browser storage is used for the signed-in session and theme preference, not project, faculty, student, or evaluation records.
 
 ## Evaluation API
 
@@ -26,4 +26,6 @@ The student login operation issues a six-hour session token stored in Apps Scrip
 
 The existing `Evaluations` tab must have these columns in order: `EvaluationID, StudentID, GroupCode, ProposalRating, PitchVideoRating, PosterRating, Comment, SubmittedAt`. Ratings are Proposal, Pitch Video, and Poster (1–5); the sheet schema is not modified by the app. After changing `google-apps-script/Code.gs`, redeploy the Apps Script web app so the endpoint runs the updated backend.
 
-The default API base URL can be overridden with `VITE_API_URL`. Remaining backend integration includes moving demo settings, aggregates, and faculty evaluation views to the API, plus production deployment and operational monitoring.
+The Admin Rating Analytics page reads all evaluation records through the authenticated `getRatingAnalytics` operation. The operation is restricted to faculty administrators and classifies each evaluator against the live Faculty and Students sheets; unknown historical IDs remain in the combined view. Analytics is read-only and does not change rating submission. Other clients receive only empty aggregate data unless signed in as an Admin, consistent with the rating visibility policy.
+
+The default API base URL can be overridden with `VITE_API_URL`. Remaining backend integration includes production deployment and operational monitoring.

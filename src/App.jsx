@@ -8,11 +8,13 @@ import EvaluatePage from './pages/student/EvaluatePage';
 import MyEvaluationsPage from './pages/student/MyEvaluationsPage';
 import AllProjectsPage from './pages/faculty/AllProjectsPage';
 import MyTeamsPage from './pages/faculty/MyTeamsPage';
+import FacultyMyEvaluationsPage from './pages/faculty/MyEvaluationsPage';
 import ProjectDetailPage from './pages/shared/ProjectDetailPage';
 import ProfilePage from './pages/shared/ProfilePage';
 import { EmptyState } from './components/Feedback';
 import { useAuth } from './context/AuthContext';
-import { homePathFor, isFaculty, isGuest, isStudent } from './utils/roles';
+import { homePathFor, isAdmin, isFaculty, isGuest, isStudent } from './utils/roles';
+import RatingAnalyticsPage from './pages/faculty/RatingAnalyticsPage';
 
 export default function App() {
   const { user } = useAuth();
@@ -37,9 +39,13 @@ export default function App() {
           <Route index element={<Navigate to="all-projects" replace />} />
           <Route path="all-projects" element={<AllProjectsPage />} />
           <Route path="my-teams" element={<MyTeamsPage />} />
+          <Route path="evaluations" element={<FacultyMyEvaluationsPage />} />
           <Route path="projects/:projectId" element={<ProjectDetailPage />} />
           <Route path="projects/:projectId/evaluate" element={<EvaluatePage />} />
           <Route path="profile" element={<ProfilePage />} />
+          <Route element={<ProtectedRoute allow={isAdmin} />}>
+            <Route path="rating-analytics" element={<RatingAnalyticsPage />} />
+          </Route>
         </Route>
       </Route>
 

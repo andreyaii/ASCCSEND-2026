@@ -1,49 +1,12 @@
-import { evaluations as seed } from '../data/evaluations.js';
-import { groups } from '../data/groups.js';
-import { students } from '../data/students.js';
 import { evaluationCriteria, RATING_SCALE } from '../data/settings.js';
 import { calcOverall } from '../utils/ratings.js';
 import { request } from '../config/apiConfig.js';
 import { checkEligibility } from './evaluationAssignment.js';
 import { getSettings } from './settingsService.js';
-import { load, save } from './mockStore.js';
 import { getCurrentUser } from './authService.js';
 import { isAdmin, isFaculty, isGuest, isStudent } from '../utils/roles.js';
 import { getProjects } from './projectService.js';
 
-const all = () => {
-  const evaluations = load('evaluations', seed);
-  if (!Array.isArray(evaluations)) throw new Error('Saved evaluations are invalid. Reset the demo data before continuing.');
-  const ids = new Set();
-  const evaluatedPairs = new Set();
-  const legacyFourCriteria = ['c1', 'c2', 'c3', 'c4'].map((id) => ({ id }));
-  const legacyFiveCriteria = [...legacyFourCriteria, { id: 'c5' }];
-  const valid = evaluations.every((evaluation) => {
-    if (!evaluation || typeof evaluation !== 'object'
-      || typeof evaluation.id !== 'string'
-      || typeof evaluation.evaluatorId !== 'string'
-      || !evaluation.evaluatorId.trim()
-      || typeof evaluation.evaluatedGroupId !== 'string'
-      || !evaluation.evaluatedGroupId.trim()
-      || !evaluation.ratings || typeof evaluation.ratings !== 'object'
-      || !Number.isFinite(evaluation.overallScore)
-      || typeof evaluation.comments !== 'string'
-      || !Number.isFinite(Date.parse(evaluation.submittedAt))) return false;
-    const pair = `${evaluation.evaluatorId}:${evaluation.evaluatedGroupId}`;
-    if (ids.has(evaluation.id) || evaluatedPairs.has(pair)) return false;
-    ids.add(evaluation.id);
-    evaluatedPairs.add(pair);
-    const criteria = Object.hasOwn(evaluation.ratings, 'c5')
-      ? legacyFiveCriteria
-      : Object.hasOwn(evaluation.ratings, 'c4') ? legacyFourCriteria : evaluationCriteria;
-    return criteria.every((criterion) => {
-      const rating = evaluation.ratings[criterion.id];
-      return Number.isInteger(rating) && rating >= 1 && rating <= RATING_SCALE;
-    }) && evaluation.overallScore === calcOverall(evaluation.ratings, criteria);
-  });
-  if (!valid) throw new Error('Saved evaluation records are invalid. Reset the demo data before continuing.');
-  return evaluations;
-};
 const submissionsInProgress = new Set();
 
 function isValidSubmittedAt(value) {
@@ -89,15 +52,55 @@ function requireCurrentEvaluator(evaluatorId) {
   return currentUser;
 }
 
-function requireDemoAdmin(user) {
-  const currentUser = getCurrentUser();
-  if (!import.meta.env?.DEV || !isAdmin(user) || currentUser?.id !== user.id) {
-    throw new Error('Resetting evaluation data is available only to signed-in administrators in development mode.');
-  }
-}
-
 export async function getEvaluationsByEvaluator(evaluatorId) {
   return (await getStudentEvaluationData(evaluatorId)).evaluations;
+}
+
+export async function getAdminRatingAnalytics(user) {
+  const currentUser = getCurrentUser();
+  if (!isAdmin(user) || !isAdmin(currentUser) || currentUser.id !== user.id) {
+    throw new Error('Only the currently signed-in administrator can view rating analytics.');
+  }
+
+  const response = await request('getRatingAnalytics', { authenticated: true });
+  if (!Array.isArray(response.data?.evaluations)) {
+    throw new Error('Rating analytics response is invalid.');
+  }
+
+  return response.data.evaluations.map((row) => parseEvaluationRow(row, true));
+}
+
+function parseEvaluationRow(row, includeEvaluatorType = false) {
+  const ratings = {
+    c1: Number(row.ProposalRating),
+    c2: Number(row.PitchVideoRating),
+    c3: Number(row.PosterRating),
+  };
+  const id = String(row.EvaluationID || '').trim();
+  const evaluatorId = String(row.StudentID || '').trim();
+  const evaluatedGroupId = String(row.GroupCode || '').trim();
+  const submittedAt = String(row.SubmittedAt || '');
+  const evaluatorType = String(row.EvaluatorType || '');
+  if (
+    !id
+    || !evaluatorId
+    || !evaluatedGroupId
+    || (includeEvaluatorType && !['student', 'faculty', 'unknown'].includes(evaluatorType))
+    || !Object.values(ratings).every((rating) => Number.isInteger(rating) && rating >= 1 && rating <= RATING_SCALE)
+    || !isValidSubmittedAt(submittedAt)
+  ) {
+    throw new Error('Evaluation data contains an invalid record.');
+  }
+  return {
+    id,
+    evaluatorId,
+    evaluatorType: includeEvaluatorType ? evaluatorType : undefined,
+    evaluatedGroupId,
+    ratings,
+    overallScore: calcOverall(ratings),
+    comments: String(row.Comment || ''),
+    submittedAt,
+  };
 }
 
 export async function getStudentEvaluationData(evaluatorId) {
@@ -141,24 +144,57 @@ export async function getStudentEvaluationData(evaluatorId) {
   return { evaluations, status };
 }
 
+export async function getFacultyEvaluationData(user) {
+  const currentUser = getCurrentUser();
+  if (!isFaculty(user) || !isFaculty(currentUser) || currentUser.id !== user.id) {
+    throw new Error('Only the currently signed-in faculty member can view their evaluations.');
+  }
+
+  const response = await request('getFacultyEvaluationData', { authenticated: true });
+  if (!Array.isArray(response.data?.evaluations)) {
+    throw new Error('Faculty evaluation history response is invalid.');
+  }
+  return response.data.evaluations.map((row) => {
+    const evaluation = parseEvaluationRow(row);
+    if (evaluation.evaluatorId !== String(user.id)) {
+      throw new Error('Faculty evaluation history contains a record for another evaluator.');
+    }
+    return evaluation;
+  });
+}
+
 // Raw evaluations received by a group (faculty detail view; includes comments).
 export async function getEvaluationsForGroup(groupId, user) {
   const currentUser = getCurrentUser();
   if (!isFaculty(user) || currentUser?.id !== user.id) throw new Error('Only signed-in faculty can view received evaluation details.');
-  return all()
-    .filter((e) => e.evaluatedGroupId === groupId)
-    .map((e) => {
-      const s = students.find((x) => x.id === e.evaluatorId);
-      return { ...e, evaluatorName: s?.name, evaluatorGroup: groups.find((g) => g.id === s?.groupId)?.groupName };
-    });
+  const response = await request('getEvaluationsForGroup', {
+    authenticated: true,
+    query: { groupCode: groupId },
+  });
+  if (!Array.isArray(response.data)) {
+    throw new Error('Received evaluation response is invalid.');
+  }
+  return response.data.map((row) => {
+    const evaluation = parseEvaluationRow(row, true);
+    if (evaluation.evaluatedGroupId !== groupId) {
+      throw new Error('Received evaluation response contains a different group.');
+    }
+    return {
+      ...evaluation,
+      evaluatorName: evaluation.evaluatorId,
+      evaluatorGroup: evaluation.evaluatorType === 'student' ? 'Student' : 'Faculty',
+    };
+  });
 }
 
 // Aggregates only (no comments, no evaluator identity): safe for student-facing views.
-export async function getAggregates() {
+export async function getAggregates(user) {
+  if (!isAdmin(user)) return {};
+  const evaluations = await getAdminRatingAnalytics(user);
   const map = {};
-  all().forEach((e) => {
-    const a = (map[e.evaluatedGroupId] ||= { total: 0, count: 0 });
-    a.total += e.overallScore;
+  evaluations.forEach((evaluation) => {
+    const a = (map[evaluation.evaluatedGroupId] ||= { total: 0, count: 0 });
+    a.total += evaluation.overallScore;
     a.count += 1;
   });
   return Object.fromEntries(Object.entries(map).map(([id, a]) => [id, { average: a.total / a.count, count: a.count }]));
@@ -170,8 +206,19 @@ export async function getEligibility(studentId, targetGroupId) {
   if (isGuest(currentUser)) return { canEvaluate: false, code: 'guest', reason: 'Guests cannot evaluate projects.' };
 
   if (isFaculty(currentUser)) {
-    const projects = await getProjects();
-    const existing = all().filter((e) => e.evaluatorId === studentId);
+    if (currentUser.id !== studentId) {
+      throw new Error('Only the currently signed-in faculty member can check evaluation eligibility.');
+    }
+    const [projects, response] = await Promise.all([
+      getProjects(),
+      request('getEvaluations', { authenticated: true }),
+    ]);
+    if (!Array.isArray(response.data)) {
+      throw new Error('Evaluation response is invalid.');
+    }
+    const existing = response.data
+      .map((evaluation) => parseEvaluationRow(evaluation))
+      .filter((evaluation) => evaluation.evaluatorId === studentId);
     return checkEligibility({
       user: currentUser,
       targetGroupId,
@@ -244,41 +291,7 @@ export async function submitEvaluation({ evaluatorId, evaluatedGroupId, ratings,
       throw new Error(`Comments must be ${settings.commentMaxLength} characters or fewer.`);
     }
 
-    if (isFaculty(currentUser)) {
-      let response;
-      try {
-        response = await request('submitEvaluation', {
-          method: 'POST',
-          authenticated: true,
-          body: {
-            groupCode: evaluatedGroupId,
-            proposalRating: savedRatings.c1,
-            pitchVideoRating: savedRatings.c2,
-            posterRating: savedRatings.c3,
-            comment: cleanedComments,
-          },
-        });
-      } catch {
-        // Fallback for faculty if remote Apps Script is not yet redeployed
-      }
-
-      const evaluationId = response?.evaluationId || `EV-FAC-${Date.now()}`;
-      const submittedAt = response?.submittedAt || new Date().toISOString();
-      const evalRecord = {
-        id: evaluationId,
-        evaluatorId,
-        evaluatedGroupId,
-        ratings: savedRatings,
-        overallScore: calcOverall(savedRatings, evaluationCriteria),
-        comments: cleanedComments,
-        submittedAt,
-      };
-      const existing = load('evaluations', seed);
-      save('evaluations', [...existing, evalRecord], { replaceCorrupt: true });
-      return evalRecord;
-    }
-
-    requireCurrentStudent(evaluatorId);
+    if (isStudent(currentUser)) requireCurrentStudent(evaluatorId);
     const response = await request('submitEvaluation', {
       method: 'POST',
       authenticated: true,
@@ -309,11 +322,6 @@ export async function submitEvaluation({ evaluatorId, evaluatedGroupId, ratings,
   } finally {
     submissionsInProgress.delete(evaluatorId);
   }
-}
-
-export function resetEvaluations(user) {
-  requireDemoAdmin(user);
-  return save('evaluations', seed, { replaceCorrupt: true });
 }
 
 export async function getEvaluationStatus(studentId) {

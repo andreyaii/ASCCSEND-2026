@@ -30,7 +30,7 @@ export default function MyGroupPage() {
     async (force) => {
       const [project, aggregates, status] = await Promise.all([
         getProjectByGroupId(user.groupId, { refresh: force }),
-        getAggregates(),
+        getAggregates(user),
         getEvaluationStatus(user.id),
       ]);
 

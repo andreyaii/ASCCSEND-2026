@@ -15,7 +15,7 @@ export default function AllProjectsPage() {
   const { data, loading, error, reload } = useAsync(
     async (force) => ({
       projects: await getProjects({ refresh: force }),
-      aggregates: await getAggregates(),
+      aggregates: await getAggregates(user),
     }),
     [user?.id],
     `${guest ? 'guest' : 'faculty'}-all-projects:${user?.id}`,

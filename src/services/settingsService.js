@@ -1,23 +1,11 @@
+import { request } from '../config/apiConfig.js';
 import { initialSettings, evaluationCriteria } from '../data/settings.js';
-import { getCurrentUser } from './authService.js';
-import { load, save } from './mockStore.js';
-import { isAdmin } from '../utils/roles.js';
-
-const isDemoAdmin = (user) =>
-  Boolean(import.meta.env?.DEV && user && isAdmin(user) && getCurrentUser()?.id === user.id);
-
-function assertDemoAdmin(user) {
-  if (!isDemoAdmin(user)) throw new Error('This demo-only control is available to signed-in administrators in development mode.');
-}
 
 function validateSettings(settings) {
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
-    throw new Error('Saved settings are invalid. Reset the demo settings before continuing.');
+    throw new Error('The evaluation settings response is invalid.');
   }
   const value = { ...initialSettings, ...settings };
-  if (typeof value.ratingsVisible !== 'boolean' || typeof value.resultsPublished !== 'boolean') {
-    throw new Error('Saved rating visibility settings are invalid.');
-  }
   if (!['free-select', 'assigned'].includes(value.evaluationAssignmentMethod)) {
     throw new Error('The evaluation assignment method is invalid.');
   }
@@ -27,33 +15,28 @@ function validateSettings(settings) {
   return value;
 }
 
+function normalizeSettingName(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
 export async function getSettings() {
-  return validateSettings(load('settings', initialSettings));
+  const response = await request('getSettings');
+  if (!response.data || typeof response.data !== 'object' || Array.isArray(response.data)) {
+    throw new Error('The evaluation settings response is invalid.');
+  }
+
+  const settings = { ...initialSettings };
+  Object.entries(response.data).forEach(([name, value]) => {
+    const key = normalizeSettingName(name);
+    if (key === 'evaluationassignmentmethod') {
+      settings.evaluationAssignmentMethod = String(value).trim().toLowerCase();
+    } else if (key === 'commentmaxlength') {
+      settings.commentMaxLength = Number(value);
+    }
+  });
+  return validateSettings(settings);
 }
-
-async function updateSettings(user, patch) {
-  assertDemoAdmin(user);
-  const next = validateSettings({ ...(await getSettings()), ...patch });
-  save('settings', next);
-  return next;
-}
-
-// Display settings never change submitted evaluation records.
-export const setRatingsVisible = (user, visible) => {
-  if (typeof visible !== 'boolean') throw new Error('Rating visibility must be enabled or disabled.');
-  return updateSettings(user, { ratingsVisible: visible });
-};
-
-export const setResultsPublished = (user, published) => {
-  if (typeof published !== 'boolean') throw new Error('Result publication must be enabled or disabled.');
-  return updateSettings(user, { resultsPublished: published });
-};
 
 export async function getEvaluationCriteria() {
   return evaluationCriteria;
-}
-
-export function resetSettings(user) {
-  assertDemoAdmin(user);
-  return save('settings', initialSettings, { replaceCorrupt: true });
 }

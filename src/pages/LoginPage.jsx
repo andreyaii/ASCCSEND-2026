@@ -15,12 +15,12 @@ import { homePathFor } from '../utils/roles';
 
 const roles = ['Student', 'Faculty'];
 const identifierLabels = {
-  Student: 'Student ID / Student No.',
-  Faculty: 'Faculty ID / Institutional Email',
+  Student: 'Student ID',
+  Faculty: 'Faculty ID',
 };
 const identifierPlaceholders = {
-  Student: 'Enter your Student ID or Student No.',
-  Faculty: 'Faculty ID, institutional email, or Guest',
+  Student: 'Enter your Student ID',
+  Faculty: 'Faculty ID or Guest',
 };
 
 export default function LoginPage() {
@@ -99,7 +99,7 @@ export default function LoginPage() {
           <span className="login-date-badge">
             <span className="login-status-dot" aria-hidden="true" />
             <CalendarDays className="h-3.5 w-3.5 text-[#ff7a3d] sm:hidden" aria-hidden="true" />
-            <span>November 25 – 26, 2026</span>
+            <span>November 24 – 25, 2026</span>
           </span>
           <button type="button" className="login-agenda-button" onClick={() => setActivePanel('agenda')}>
             Agenda
@@ -232,7 +232,7 @@ export default function LoginPage() {
             </p>
             <div className="mt-5 flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3.5 py-3 text-xs text-[#b9b9c3]">
               <CalendarDays className="h-4 w-4 text-[#ff7440]" aria-hidden="true" />
-              November 25 – 26, 2026 <span className="text-[#595963]">·</span> CIT-U College of Computer Studies
+              November 24 – 25, 2026 <span className="text-[#595963]">·</span> CIT-U College of Computer Studies
             </div>
           </section>
         </div>

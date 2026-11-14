@@ -1,6 +1,6 @@
 ================================================================================
 TECHCON / PPMD 2026 - FEATURE IMPLEMENTATION & CONTINUATION NOTES
-Date: 2026-11-12
+Date: 2026-11-14
 ================================================================================
 
 1. SUMMARY OF IMPLEMENTED FEATURES
@@ -18,8 +18,7 @@ Date: 2026-11-12
 - Added Guest authentication support in `src/services/authService.js`:
   * Handles role 'Guest' in `login(identifier, password, role)`.
   * Normalized user fields: `accountType: 'Guest'`, `role: 'Guest'`.
-  * Added fallback guest credentials (`guest` / `guest`, `guest@techcon.edu` / `techcon123`).
-  * Added Guest entry to `DEMO_ACCOUNTS`.
+  * Guest authentication is verified by the backend and requires its session token.
 - Guest login uses the Faculty tab in `src/pages/LoginPage.jsx`:
   * The login page displays only Student and Faculty tabs.
   * Entering `Guest` (case-insensitive) as the Faculty identifier routes authentication through the backend guest account flow.
@@ -40,7 +39,7 @@ Date: 2026-11-12
 - Completely removed the "Hide All / Show All" feature and its UI controls:
   * `src/components/RatingsAdminControl.jsx` has been replaced to render `null`.
   * Removed `<RatingsAdminControl />` mount from `src/layouts/AppLayout.jsx`.
-  * Removed the "Results published" checkbox from `src/components/DemoPanel.jsx`.
+  * Deleted the development-only `src/components/DemoPanel.jsx` and its local reset controls.
   * `canToggleRatings()` in `src/utils/roles.js` returns `false`.
 - Ensured ratings are restricted across all pages and components:
   * `RatingSummary` displays "Ratings hidden" (compact) or explanation box (full) for non-admins.
@@ -78,9 +77,9 @@ Frontend:
 - `src/App.jsx`: Added `/guest` and `/faculty/projects/:projectId/evaluate` routes.
 - `src/layouts/AppLayout.jsx`: Added guest nav support, removed RatingsAdminControl.
 - `src/components/RatingsAdminControl.jsx`: Emptied / returns null.
-- `src/components/DemoPanel.jsx`: Removed results published toggle.
+- `src/components/DemoPanel.jsx`: Deleted the development-only demo/reset panel.
 - `src/pages/LoginPage.jsx`: Displays only Student and Faculty tabs; accepts Guest as a Faculty identifier.
-- `src/services/authService.js`: Handles guest login fallback and session normalization when Guest is entered under Faculty.
+- `src/services/authService.js`: Uses backend guest authentication and normalizes its session.
 - `src/pages/shared/ProjectDetailPage.jsx`: Added evaluate box for faculty with disabled state for assigned groups; guest view restrictions.
 - `src/pages/faculty/AllProjectsPage.jsx`: Added guest navigation support and dynamic assigned team badge; badge matching safely handles numeric IDs.
 - `src/services/facultyService.js`: Updated getAssignedGroupIds to match against project list from getProjects(), using normalized identity values.

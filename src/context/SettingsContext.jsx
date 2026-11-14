@@ -19,8 +19,6 @@ export function SettingsProvider({ children }) {
     return () => { active = false; };
   }, []);
 
-  const setRatingsVisible = useCallback(async (visible) => setSettings(await settingsService.setRatingsVisible(user, visible)), [user]);
-  const setResultsPublished = useCallback(async (published) => setSettings(await settingsService.setResultsPublished(user, published)), [user]);
   const refresh = useCallback(async () => {
     try {
       const value = await settingsService.getSettings();
@@ -37,11 +35,9 @@ export function SettingsProvider({ children }) {
       settings,
       ratingsShown: settings ? canViewRatings(user, settings) : false,
       ratingsHiddenReason: settings ? ratingsHiddenReason(user, settings) : '',
-      setRatingsVisible,
-      setResultsPublished,
       refresh,
     }),
-    [settings, user, setRatingsVisible, setResultsPublished, refresh]
+    [settings, user, refresh]
   );
 
   if (error) return <ErrorState error={error} onRetry={refresh} />;

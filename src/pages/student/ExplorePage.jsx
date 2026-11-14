@@ -13,7 +13,7 @@ export default function ExplorePage() {
     async (force) => {
       const [projects, aggregates, evaluationData] = await Promise.all([
         getProjects({ excludeGroupId: user.groupId, refresh: force }), // own group is excluded
-        getAggregates(),
+        getAggregates(user),
         getStudentEvaluationData(user.id),
       ]);
       return {

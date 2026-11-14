@@ -2,21 +2,21 @@ import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
 import { initialSettings, evaluationCriteria } from '../src/data/settings.js';
 import { checkEligibility } from '../src/services/evaluationAssignment.js';
-import { getAggregates, getEligibility, getEvaluationStatus, getStudentEvaluationData, submitEvaluation } from '../src/services/evaluationService.js';
+import { getAdminRatingAnalytics, getAggregates, getEligibility, getEvaluationStatus, getFacultyEvaluationData, getStudentEvaluationData, submitEvaluation } from '../src/services/evaluationService.js';
 import { deleteProjectThumbnail, getProjects } from '../src/services/projectService.js';
-import { load, save } from '../src/services/mockStore.js';
-import { students } from '../src/data/students.js';
-import { groups } from '../src/data/groups.js';
+import { getSettings } from '../src/services/settingsService.js';
 import { calcOverall } from '../src/utils/ratings.js';
 import { getProjectLogoUrl } from '../src/utils/projectLogo.js';
 import { isProjectAssignedToFaculty } from '../src/utils/faculty.js';
 import { isGuest, isFaculty, isStudent, isAdmin, canViewRatings, canToggleRatings, homePathFor, basePathFor, ratingsHiddenReason } from '../src/utils/roles.js';
 import { guestNav } from '../src/config/navigation.js';
+import { summarizeRatings } from '../src/utils/ratingAnalytics.js';
 import { login } from '../src/services/authService.js';
 
 const entries = new Map();
 let apiEvaluations;
 let apiGroups;
+let apiSettings;
 let currentStudent;
 let apiFailure;
 let requestCounts;
@@ -47,7 +47,12 @@ beforeEach(() => {
   currentStudent = { id: 's1', accountType: 'Student', groupId: 'g1' };
   entries.set('techcon:session', JSON.stringify({ user: currentStudent, sessionToken: 'test-session' }));
   apiEvaluations = [];
-  apiGroups = groups.map((group) => ({ groupCode: group.id, title: group.groupName, tag: 'Test' }));
+  apiGroups = Array.from({ length: 8 }, (_, index) => ({
+    groupCode: `g${index + 1}`,
+    title: `Group ${String(index + 1).padStart(2, '0')}`,
+    tag: 'Test',
+  }));
+  apiSettings = { EvaluationAssignmentMethod: 'free-select', CommentMaxLength: '500' };
   apiFailure = false;
   requestCounts = new Map();
   globalThis.fetch = async (url, options = {}) => {
@@ -56,9 +61,35 @@ beforeEach(() => {
     const payload = options.method === 'POST' ? JSON.parse(options.body) : {};
     const action = requestUrl.searchParams.get('action') || payload.action;
     requestCounts.set(action, (requestCounts.get(action) || 0) + 1);
-    const mine = apiEvaluations.filter((evaluation) => evaluation.StudentID === currentStudent.id);
+    const activeUser = JSON.parse(entries.get('techcon:session') || '{}').user;
+    const mine = apiEvaluations.filter((evaluation) => evaluation.StudentID === activeUser?.id);
 
+    if (action === 'getSettings') return response({ success: true, data: apiSettings });
     if (action === 'getProjects') return response({ success: true, data: apiGroups });
+    if (action === 'getRatingAnalytics') {
+      return response({
+        success: true,
+        data: {
+          evaluations: apiEvaluations.map((evaluation) => ({
+            ...evaluation,
+            EvaluatorType: evaluation.StudentID.startsWith('f') ? 'faculty' : 'student',
+          })),
+        },
+      });
+    }
+    if (action === 'getEvaluations') return response({ success: true, data: mine });
+    if (action === 'getFacultyEvaluationData') {
+      return response({ success: true, data: { evaluations: mine } });
+    }
+    if (action === 'getEvaluationsForGroup') {
+      const groupCode = requestUrl.searchParams.get('groupCode');
+      return response({
+        success: true,
+        data: apiEvaluations
+          .filter((evaluation) => evaluation.GroupCode === groupCode)
+          .map((evaluation) => ({ ...evaluation, EvaluatorType: 'student' })),
+      });
+    }
     if (action === 'deleteThumbnail') {
       assert.equal(payload.sessionToken, 'test-session');
       return response({ success: true, thumbnail: null });
@@ -95,12 +126,12 @@ beforeEach(() => {
       });
     }
     if (action === 'submitEvaluation') {
-      assert.equal(payload.sessionToken, 'test-session');
+      assert.equal(payload.sessionToken, JSON.parse(entries.get('techcon:session')).sessionToken);
       assert.equal(Object.hasOwn(payload, 'studentId'), false);
       assert.equal(Object.hasOwn(payload, 'documentationRating'), false);
       apiEvaluations.push({
         EvaluationID: 'EV-test',
-        StudentID: currentStudent.id,
+        StudentID: activeUser.id,
         GroupCode: payload.groupCode,
         ProposalRating: payload.proposalRating,
         PitchVideoRating: payload.pitchVideoRating,
@@ -152,9 +183,92 @@ test('evaluation form exposes only proposal, pitch video, and poster categories'
   ]);
 });
 
-test('existing local demo evaluation aggregates remain valid', async () => {
-  const aggregates = await getAggregates();
-  assert.ok(Object.keys(aggregates).length > 0);
+test('rating aggregates use live records and are only requested by administrators', async () => {
+  apiEvaluations.push({
+    EvaluationID: 'EV-live',
+    StudentID: 's1',
+    GroupCode: 'g2',
+    ProposalRating: 5,
+    PitchVideoRating: 4,
+    PosterRating: 3,
+    Comment: '',
+    SubmittedAt: '2026-11-11T00:00:00.000Z',
+  });
+  assert.deepEqual(await getAggregates(currentStudent), {});
+
+  const admin = { id: 'f3', accountType: 'Faculty', role: 'Admin' };
+  entries.set('techcon:session', JSON.stringify({ user: admin, sessionToken: 'test-session' }));
+  const aggregates = await getAggregates(admin);
+  assert.deepEqual(aggregates.g2, { average: 4, count: 1 });
+  assert.equal(requestCounts.get('getRatingAnalytics'), 1);
+});
+
+test('faculty My Evaluations loads only records for the signed-in faculty account', async () => {
+  const faculty = { id: 'f1', accountType: 'Faculty', role: 'Adviser' };
+  entries.set('techcon:session', JSON.stringify({ user: faculty, sessionToken: 'faculty-session' }));
+  apiEvaluations.push(
+    {
+      EvaluationID: 'EV-faculty',
+      StudentID: 'f1',
+      GroupCode: 'g4',
+      ProposalRating: 5,
+      PitchVideoRating: 4,
+      PosterRating: 3,
+      Comment: '',
+      SubmittedAt: '2026-11-11T00:00:00.000Z',
+    },
+    {
+      EvaluationID: 'EV-student',
+      StudentID: 's1',
+      GroupCode: 'g5',
+      ProposalRating: 3,
+      PitchVideoRating: 3,
+      PosterRating: 3,
+      Comment: '',
+      SubmittedAt: '2026-11-11T00:00:00.000Z',
+    },
+  );
+
+  const evaluations = await getFacultyEvaluationData(faculty);
+  assert.equal(evaluations.length, 1);
+  assert.equal(evaluations[0].evaluatedGroupId, 'g4');
+  assert.equal(evaluations[0].overallScore, 4);
+  assert.equal(requestCounts.get('getFacultyEvaluationData'), 1);
+});
+
+test('rating analytics ranks live records by evaluator source and selected category', () => {
+  const evaluations = [
+    { evaluatorType: 'student', evaluatedGroupId: 'GROUP-A', ratings: { c1: 4, c2: 3, c3: 5 } },
+    { evaluatorType: 'faculty', evaluatedGroupId: 'GROUP-A', ratings: { c1: 2, c2: 5, c3: 4 } },
+    { evaluatorType: 'unknown', evaluatedGroupId: 'GROUP-B', ratings: { c1: 5, c2: 4, c3: 4 } },
+  ];
+  const projects = [
+    { groupId: 'GROUP-A', title: 'Group A' },
+    { groupId: 'GROUP-B', title: 'Group B' },
+  ];
+
+  const combined = summarizeRatings(evaluations, projects);
+  assert.equal(combined.evaluationCount, 3);
+  assert.equal(combined.categories[0].leaders[0].groupName, 'Group B');
+  assert.equal(combined.categories[0].leaders[0].average, 5);
+  assert.equal(combined.overallGroups[0].groupName, 'Group B');
+
+  const facultyPitch = summarizeRatings(evaluations, projects, {
+    source: 'faculty',
+    categoryId: 'c2',
+  });
+  assert.equal(facultyPitch.evaluationCount, 1);
+  assert.equal(facultyPitch.categories.length, 1);
+  assert.equal(facultyPitch.categories[0].leaders[0].groupName, 'Group A');
+  assert.equal(facultyPitch.categories[0].leaders[0].average, 5);
+});
+
+test('rating analytics service rejects non-admin sessions before requesting sheet data', async () => {
+  await assert.rejects(
+    getAdminRatingAnalytics({ id: currentStudent.id, accountType: 'Faculty', role: 'Admin' }),
+    /Only the currently signed-in administrator/,
+  );
+  assert.equal(requestCounts.get('getRatingAnalytics') || 0, 0);
 });
 
 test('evaluation history and status share one authenticated API request', async () => {
@@ -286,7 +400,7 @@ test('submission validates ratings and comment length before calling the API', a
     submitEvaluation({ evaluatorId: 's1', evaluatedGroupId: 'g4', ratings: { ...validRatings, c2: 2.5 } }),
     /rate every criterion/,
   );
-  save('settings', { ...initialSettings, commentMaxLength: 3 });
+  apiSettings.CommentMaxLength = '3';
   await assert.rejects(
     submitEvaluation({ evaluatorId: 's1', evaluatedGroupId: 'g4', ratings: validRatings, comments: 'four' }),
     /3 characters or fewer/,
@@ -303,7 +417,7 @@ test('simultaneous submissions are guarded in the client and the backend remains
 
 test('assigned mode does not silently assign groups', () => {
   const result = checkEligibility({
-    student: students[0],
+    student: { id: 's1', groupId: 'g1', accountType: 'Student' },
     targetGroupId: 'g4',
     existing: [],
     allGroups: [{ id: 'g1' }, { id: 'g4' }],
@@ -314,7 +428,7 @@ test('assigned mode does not silently assign groups', () => {
 });
 
 test('assigned evaluation mode remains enforced by the existing client assignment strategy', async () => {
-  save('settings', { ...initialSettings, evaluationAssignmentMethod: 'assigned' });
+  apiSettings.EvaluationAssignmentMethod = 'assigned';
   const eligibility = await getEligibility('s1', 'g4');
   assert.equal(eligibility.canEvaluate, false);
   assert.equal(eligibility.code, 'not-assigned');
@@ -323,17 +437,20 @@ test('assigned evaluation mode remains enforced by the existing client assignmen
 test('database request failures surface instead of falling back to local evaluation data', async () => {
   apiFailure = true;
   await assert.rejects(getEvaluationStatus('s1'), /Database unavailable/);
-  assert.equal(load('evaluations', []).length, 0);
+  assert.equal(entries.has('techcon:evaluations'), false);
   assert.equal(calcOverall(validRatings), 4);
 
   entries.set('techcon:session', JSON.stringify({ user: currentStudent }));
   await assert.rejects(getEvaluationStatus('s1'), /session has expired/);
 });
 
-test('corrupted local demo data and failed writes surface explicit errors', () => {
-  entries.set('techcon:evaluations', '{invalid');
-  assert.throws(() => load('evaluations', []), /corrupted/);
-  assert.throws(() => save('evaluations', []), /corrupted/);
+test('evaluation settings are read from the Google Sheets API', async () => {
+  apiSettings = { EvaluationAssignmentMethod: 'Assigned', CommentMaxLength: '250' };
+  assert.deepEqual(await getSettings(), {
+    ...initialSettings,
+    evaluationAssignmentMethod: 'assigned',
+    commentMaxLength: 250,
+  });
 });
 
 test('guest role restricts access to all-projects and blocks evaluations and ratings', async () => {
@@ -376,6 +493,28 @@ test('Faculty login with Guest as the identifier is handled as a guest account',
   assert.equal(user.accountType, 'Guest');
   assert.equal(user.role, 'Guest');
   assert.equal(user.id, 'GUEST-001');
+});
+
+test('Guest login fails when the authentication service is unavailable', async () => {
+  globalThis.fetch = async () => response({ message: 'Database unavailable' }, 503);
+
+  await assert.rejects(login('Guest', 'guest', 'Faculty'), /Database unavailable/);
+  assert.equal(entries.has('techcon:session'), true);
+  assert.equal(JSON.parse(entries.get('techcon:session')).user.id, 's1');
+});
+
+test('faculty login exposes the FacultyID sheet value as facultyId', async () => {
+  globalThis.fetch = async () => response({
+    success: true,
+    role: 'adviser',
+    sessionToken: 'faculty-session',
+    user: { FacultyID: 'FAC-204', FullName: 'Prof. Faculty', Role: 'Adviser' },
+  });
+
+  const user = await login('FAC-204', 'password', 'Faculty');
+
+  assert.equal(user.id, 'FAC-204');
+  assert.equal(user.facultyId, 'FAC-204');
 });
 
 test('rating visibility is strictly limited to faculty admins', () => {
@@ -429,6 +568,23 @@ test('faculty advisers cannot rate their assigned groups but can rate other grou
 
   assert.equal(result.evaluatedGroupId, 'g4');
   assert.equal(result.overallScore, 4);
+});
+
+test('faculty evaluation submission surfaces Sheets failures without writing local evaluation data', async () => {
+  const adviser = {
+    id: 'f1',
+    accountType: 'Faculty',
+    role: 'Adviser',
+    name: 'Prof. Maria Santos',
+  };
+  entries.set('techcon:session', JSON.stringify({ user: adviser, sessionToken: 'faculty-session' }));
+  apiFailure = true;
+
+  await assert.rejects(
+    submitEvaluation({ evaluatorId: adviser.id, evaluatedGroupId: 'g4', ratings: validRatings }),
+    /Database unavailable/,
+  );
+  assert.equal(entries.has('techcon:evaluations'), false);
 });
 
 test('faculty project assignment badges compare string and numeric IDs safely', () => {

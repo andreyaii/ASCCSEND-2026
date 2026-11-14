@@ -1,14 +1,11 @@
-// All localStorage access lives here so it can be swapped for API calls later.
 const PREFIX = 'techcon:';
-
-export const delay = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
 
 function storageError(action, error) {
-  return new Error(`Could not ${action} local demo data. Check browser storage availability and space.`, { cause: error });
+  return new Error(`Could not ${action} local data. Check browser storage availability and space.`, { cause: error });
 }
 
 export function load(key, fallback) {
@@ -22,7 +19,7 @@ export function load(key, fallback) {
   try {
     return JSON.parse(raw);
   } catch (error) {
-    throw new Error(`Saved ${key} data is corrupted. Reset the demo data or clear the invalid ${PREFIX + key} entry.`, { cause: error });
+    throw new Error(`Saved ${key} data is corrupted. Clear the invalid ${PREFIX + key} entry.`, { cause: error });
   }
 }
 

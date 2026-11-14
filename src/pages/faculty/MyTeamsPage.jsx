@@ -12,7 +12,7 @@ export default function MyTeamsPage() {
   const { user } = useAuth();
   const { data, loading, error, reload } = useAsync(async (force) => {
     const groupIds = await getAssignedGroupIds(user.id);
-    const [projects, aggregates] = await Promise.all([getProjects({ groupIds, refresh: force }), getAggregates()]);
+    const [projects, aggregates] = await Promise.all([getProjects({ groupIds, refresh: force }), getAggregates(user)]);
     return { projects, aggregates };
   }, [user.id], `faculty-my-teams:${user.id}`);
 

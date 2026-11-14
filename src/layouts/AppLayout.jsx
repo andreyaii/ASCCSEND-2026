@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { GraduationCap, LogOut, Menu, Moon, Sun, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { studentNav, facultyNav, guestNav } from '../config/navigation';
-import { isStudent, isFaculty, isGuest } from '../utils/roles';
-import DemoPanel from '../components/DemoPanel';
+import { studentNav, facultyNav, guestNav, adminNav } from '../config/navigation';
+import { isStudent, isFaculty, isGuest, isAdmin } from '../utils/roles';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
@@ -18,7 +17,7 @@ export default function AppLayout() {
   const { theme, toggleTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
-  const nav = isStudent(user) ? studentNav : isGuest(user) ? guestNav : facultyNav;
+  const nav = isStudent(user) ? studentNav : isGuest(user) ? guestNav : isAdmin(user) ? [...facultyNav, ...adminNav] : facultyNav;
   const roleLabel = isGuest(user) ? 'Guest' : isFaculty(user) ? `Faculty · ${user.role}` : 'Student';
   const themeToggle = (
     <button
@@ -112,7 +111,6 @@ export default function AppLayout() {
         <Outlet />
       </main>
 
-      <DemoPanel />
       <ConfirmDialog open={confirmLogout} title="Log out?" message="You will need to sign in again to continue." confirmLabel="Logout" onCancel={() => setConfirmLogout(false)} onConfirm={doLogout} />
     </div>
   );
