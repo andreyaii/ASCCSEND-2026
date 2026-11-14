@@ -1,9 +1,9 @@
 import { FileText, PlayCircle, BookOpen, ExternalLink, Image } from 'lucide-react';
 import { getProjectLogoUrl } from '../utils/projectLogo';
 
-// Three separate resources: Proposal, Pitch Video, Documentation.
+// Three separate resources: Research Paper, Pitch Video, and Poster.
 const items = [
-  { key: 'proposalLink', legacyKey: 'proposalUrl', label: 'Proposal', icon: FileText },
+  { key: 'researchPaperLink', legacyKey: 'proposalLink', label: 'Research Paper', icon: FileText },
   { key: 'pitchVideoLink', legacyKey: 'pitchVideoUrl', label: 'Pitch Video', icon: PlayCircle },
   { key: 'documentationLink', legacyKey: 'documentationUrl', label: 'Poster', icon: BookOpen },
 ];

@@ -20,7 +20,7 @@ let apiSettings;
 let currentStudent;
 let apiFailure;
 let requestCounts;
-const validRatings = { c1: 4, c2: 5, c3: 3 };
+const validRatings = { c1: 4, c2: 5, c3: 3, c4: 4 };
 const response = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
   headers: { 'Content-Type': 'application/json' },
@@ -133,9 +133,10 @@ beforeEach(() => {
         EvaluationID: 'EV-test',
         StudentID: activeUser.id,
         GroupCode: payload.groupCode,
-        ProposalRating: payload.proposalRating,
+        ResearchPaperRating: payload.researchPaperRating,
         PitchVideoRating: payload.pitchVideoRating,
         PosterRating: payload.posterRating,
+        LogoRating: payload.logoRating,
         Comment: payload.comment,
         SubmittedAt: '2026-11-11T00:00:00.000Z',
       });
@@ -165,21 +166,25 @@ test('student evaluation submission uses the authenticated API and mapped sheet 
 
   assert.equal(submitted.id, 'EV-test');
   assert.deepEqual(mine[0].ratings, validRatings);
+  assert.equal(mine[0].ratings.c1, 4);
+  assert.equal(mine[0].ratings.c4, 4);
   assert.equal(mine[0].overallScore, 4);
   assert.equal(mine[0].comments, 'Clear presentation');
   assert.deepEqual(
     Object.keys(apiEvaluations[0]),
-    ['EvaluationID', 'StudentID', 'GroupCode', 'ProposalRating', 'PitchVideoRating', 'PosterRating', 'Comment', 'SubmittedAt'],
+    ['EvaluationID', 'StudentID', 'GroupCode', 'ResearchPaperRating', 'PitchVideoRating', 'PosterRating', 'LogoRating', 'Comment', 'SubmittedAt'],
   );
   assert.equal(apiEvaluations[0].StudentID, currentStudent.id);
   assert.equal(apiEvaluations[0].PosterRating, 3);
+  assert.equal(apiEvaluations[0].LogoRating, 4);
 });
 
-test('evaluation form exposes only proposal, pitch video, and poster categories', () => {
+test('evaluation form requires research paper, pitch video, poster, and logo ratings', () => {
   assert.deepEqual(evaluationCriteria.map((criterion) => criterion.label), [
-    'Proposal',
+    'Research Paper',
     'Pitch Video',
     'Poster',
+    'Logo',
   ]);
 });
 
@@ -188,9 +193,10 @@ test('rating aggregates use live records and are only requested by administrator
     EvaluationID: 'EV-live',
     StudentID: 's1',
     GroupCode: 'g2',
-    ProposalRating: 5,
+    ResearchPaperRating: 5,
     PitchVideoRating: 4,
     PosterRating: 3,
+    LogoRating: 4,
     Comment: '',
     SubmittedAt: '2026-11-11T00:00:00.000Z',
   });
@@ -211,9 +217,10 @@ test('faculty My Evaluations loads only records for the signed-in faculty accoun
       EvaluationID: 'EV-faculty',
       StudentID: 'f1',
       GroupCode: 'g4',
-      ProposalRating: 5,
+      ResearchPaperRating: 5,
       PitchVideoRating: 4,
       PosterRating: 3,
+      LogoRating: 4,
       Comment: '',
       SubmittedAt: '2026-11-11T00:00:00.000Z',
     },
@@ -221,9 +228,10 @@ test('faculty My Evaluations loads only records for the signed-in faculty accoun
       EvaluationID: 'EV-student',
       StudentID: 's1',
       GroupCode: 'g5',
-      ProposalRating: 3,
+      ResearchPaperRating: 3,
       PitchVideoRating: 3,
       PosterRating: 3,
+      LogoRating: 3,
       Comment: '',
       SubmittedAt: '2026-11-11T00:00:00.000Z',
     },
@@ -238,9 +246,9 @@ test('faculty My Evaluations loads only records for the signed-in faculty accoun
 
 test('rating analytics ranks live records by evaluator source and selected category', () => {
   const evaluations = [
-    { evaluatorType: 'student', evaluatedGroupId: 'GROUP-A', ratings: { c1: 4, c2: 3, c3: 5 } },
-    { evaluatorType: 'faculty', evaluatedGroupId: 'GROUP-A', ratings: { c1: 2, c2: 5, c3: 4 } },
-    { evaluatorType: 'unknown', evaluatedGroupId: 'GROUP-B', ratings: { c1: 5, c2: 4, c3: 4 } },
+    { evaluatorType: 'student', evaluatedGroupId: 'GROUP-A', ratings: { c1: 4, c2: 3, c3: 5, c4: 4 } },
+    { evaluatorType: 'faculty', evaluatedGroupId: 'GROUP-A', ratings: { c1: 2, c2: 5, c3: 4, c4: 5 } },
+    { evaluatorType: 'unknown', evaluatedGroupId: 'GROUP-B', ratings: { c1: 5, c2: 4, c3: 4, c4: 4 } },
   ];
   const projects = [
     { groupId: 'GROUP-A', title: 'Group A' },
@@ -276,9 +284,10 @@ test('evaluation history and status share one authenticated API request', async 
     EvaluationID: 'EV-existing',
     StudentID: 's1',
     GroupCode: 'g2',
-    ProposalRating: 3,
+    ResearchPaperRating: 3,
     PitchVideoRating: 4,
     PosterRating: 5,
+    LogoRating: 4,
     Comment: '',
     SubmittedAt: '2026-11-10T00:00:00.000Z',
   });
@@ -286,17 +295,31 @@ test('evaluation history and status share one authenticated API request', async 
     EvaluationID: 'EV-new-format',
     StudentID: 's1',
     GroupCode: 'g3',
-    ProposalRating: 4,
+    ResearchPaperRating: 4,
     PitchVideoRating: 4,
     PosterRating: 4,
+    LogoRating: 4,
     Comment: '',
     SubmittedAt: '2026-11-11 12:30:45',
+  });
+  apiEvaluations.push({
+    EvaluationID: 'EV-before-logo-rating',
+    StudentID: 's1',
+    GroupCode: 'g4',
+    ResearchPaperRating: 3,
+    PitchVideoRating: 4,
+    PosterRating: 5,
+    LogoRating: '',
+    Comment: '',
+    SubmittedAt: '2026-11-12 12:30:45',
   });
 
   const { evaluations: mine, status } = await getStudentEvaluationData('s1');
   assert.equal(mine[0].overallScore, 4);
   assert.equal(mine[1].submittedAt, '2026-11-11 12:30:45');
-  assert.deepEqual(status, { submitted: 2 });
+  assert.equal(mine[2].ratings.c4, null);
+  assert.equal(mine[2].overallScore, 4);
+  assert.deepEqual(status, { submitted: 3 });
   assert.equal(requestCounts.get('getStudentEvaluationData'), 1);
 });
 
@@ -319,6 +342,17 @@ test('project thumbnails are exposed using the image URL consumed by project vie
 
   assert.equal(project.thumbnail, thumbnail);
   assert.equal(project.imageUrl, thumbnail);
+});
+
+test('Research Paper links from Sheets are exposed under the renamed resource property', async () => {
+  apiGroups = [{
+    groupCode: 'g2',
+    title: 'Paper project',
+    researchPaperLink: 'https://example.com/research-paper.pdf',
+  }];
+  const [project] = await getProjects({ refresh: true });
+
+  assert.equal(project.researchPaperLink, 'https://example.com/research-paper.pdf');
 });
 
 test('thumbnail deletion uses the authenticated API action', async () => {
@@ -358,9 +392,10 @@ test('eligibility blocks self, duplicate, and missing groups', async () => {
     EvaluationID: 'EV-existing',
     StudentID: 's1',
     GroupCode: 'g2',
-    ProposalRating: 4,
+    ResearchPaperRating: 4,
     PitchVideoRating: 4,
     PosterRating: 4,
+    LogoRating: 4,
     Comment: '',
     SubmittedAt: new Date().toISOString(),
   });
@@ -378,9 +413,10 @@ test('eligibility blocks self, duplicate, and missing groups', async () => {
       EvaluationID: `EV-${index}`,
       StudentID: 's1',
       GroupCode: `g${index}`,
-      ProposalRating: 4,
+      ResearchPaperRating: 4,
       PitchVideoRating: 4,
       PosterRating: 4,
+      LogoRating: 4,
       Comment: '',
       SubmittedAt: new Date().toISOString(),
     });
@@ -398,6 +434,10 @@ test('submission validates ratings and comment length before calling the API', a
   );
   await assert.rejects(
     submitEvaluation({ evaluatorId: 's1', evaluatedGroupId: 'g4', ratings: { ...validRatings, c2: 2.5 } }),
+    /rate every criterion/,
+  );
+  await assert.rejects(
+    submitEvaluation({ evaluatorId: 's1', evaluatedGroupId: 'g4', ratings: { ...validRatings, c4: 6 } }),
     /rate every criterion/,
   );
   apiSettings.CommentMaxLength = '3';

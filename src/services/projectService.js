@@ -22,7 +22,7 @@ const hydrate = (g) => ({
   facultyId: g.facultyId || null,
   thumbnail: g.thumbnail || '',
   imageUrl: g.thumbnail || '',
-  proposalLink: g.proposalLink || '',
+  researchPaperLink: g.researchPaperLink || g.proposalLink || '',
   pitchVideoLink: g.pitchVideoLink || '',
   documentationLink: g.documentationLink || g.posterLink || '',
   posterLink: g.posterLink || g.documentationLink || '',

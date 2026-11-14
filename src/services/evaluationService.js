@@ -71,11 +71,7 @@ export async function getAdminRatingAnalytics(user) {
 }
 
 function parseEvaluationRow(row, includeEvaluatorType = false) {
-  const ratings = {
-    c1: Number(row.ProposalRating),
-    c2: Number(row.PitchVideoRating),
-    c3: Number(row.PosterRating),
-  };
+  const ratings = parseEvaluationRatings(row);
   const id = String(row.EvaluationID || '').trim();
   const evaluatorId = String(row.StudentID || '').trim();
   const evaluatedGroupId = String(row.GroupCode || '').trim();
@@ -86,7 +82,8 @@ function parseEvaluationRow(row, includeEvaluatorType = false) {
     || !evaluatorId
     || !evaluatedGroupId
     || (includeEvaluatorType && !['student', 'faculty', 'unknown'].includes(evaluatorType))
-    || !Object.values(ratings).every((rating) => Number.isInteger(rating) && rating >= 1 && rating <= RATING_SCALE)
+    || ![ratings.c1, ratings.c2, ratings.c3].every((rating) => Number.isInteger(rating) && rating >= 1 && rating <= RATING_SCALE)
+    || (ratings.c4 !== null && (!Number.isInteger(ratings.c4) || ratings.c4 < 1 || ratings.c4 > RATING_SCALE))
     || !isValidSubmittedAt(submittedAt)
   ) {
     throw new Error('Evaluation data contains an invalid record.');
@@ -103,6 +100,18 @@ function parseEvaluationRow(row, includeEvaluatorType = false) {
   };
 }
 
+function parseEvaluationRatings(row) {
+  const logoRating = row.LogoRating;
+  return {
+    c1: Number(row.ResearchPaperRating),
+    c2: Number(row.PitchVideoRating),
+    c3: Number(row.PosterRating),
+    c4: logoRating === '' || logoRating === null || logoRating === undefined
+      ? null
+      : Number(logoRating),
+  };
+}
+
 export async function getStudentEvaluationData(evaluatorId) {
   requireCurrentStudent(evaluatorId);
   const response = await request('getStudentEvaluationData', { authenticated: true });
@@ -110,11 +119,7 @@ export async function getStudentEvaluationData(evaluatorId) {
     throw new Error('Evaluation history response is invalid.');
   }
   const evaluations = response.data.evaluations.map((row) => {
-    const ratings = {
-      c1: Number(row.ProposalRating),
-      c2: Number(row.PitchVideoRating),
-      c3: Number(row.PosterRating),
-    };
+    const ratings = parseEvaluationRatings(row);
     const id = String(row.EvaluationID || '');
     const studentId = String(row.StudentID || '');
     const groupCode = String(row.GroupCode || '');
@@ -124,7 +129,8 @@ export async function getStudentEvaluationData(evaluatorId) {
       !studentId ||
       studentId !== evaluatorId ||
       !groupCode ||
-      !Object.values(ratings).every((rating) => Number.isInteger(rating) && rating >= 1 && rating <= RATING_SCALE) ||
+      ![ratings.c1, ratings.c2, ratings.c3].every((rating) => Number.isInteger(rating) && rating >= 1 && rating <= RATING_SCALE) ||
+      (ratings.c4 !== null && (!Number.isInteger(ratings.c4) || ratings.c4 < 1 || ratings.c4 > RATING_SCALE)) ||
       !isValidSubmittedAt(submittedAt)
     ) {
       throw new Error('Evaluation history contains an invalid record.');
@@ -297,9 +303,10 @@ export async function submitEvaluation({ evaluatorId, evaluatedGroupId, ratings,
       authenticated: true,
       body: {
         groupCode: evaluatedGroupId,
-        proposalRating: savedRatings.c1,
+        researchPaperRating: savedRatings.c1,
         pitchVideoRating: savedRatings.c2,
         posterRating: savedRatings.c3,
+        logoRating: savedRatings.c4,
         comment: cleanedComments,
       },
     });

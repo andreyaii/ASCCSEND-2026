@@ -71,7 +71,7 @@ function getPublicGroups(spreadsheet) {
   });
   const groupCodeIndex = headers.indexOf("GroupCode");
   const linkColumns = {};
-  const resourceHeaders = ["ProposalLink", "PitchVideoLink", "PosterLink"];
+  const resourceHeaders = ["ResearchPaperLink", "PitchVideoLink", "PosterLink"];
   const resourceIndexes = resourceHeaders.map(function(header) {
     return headers.indexOf(header);
   }).filter(function(columnIndex) {
@@ -119,7 +119,7 @@ function getPublicGroups(spreadsheet) {
         group.GroupCode = String(row[groupCodeIndex] || "").trim();
       }
 
-      group.ProposalLink = linkColumns.ProposalLink[index] || group.ProposalLink;
+      group.ResearchPaperLink = linkColumns.ResearchPaperLink[index] || group.ResearchPaperLink;
       group.PitchVideoLink = linkColumns.PitchVideoLink[index] || group.PitchVideoLink;
       group.PosterLink = linkColumns.PosterLink[index] || group.PosterLink;
       return group;
@@ -140,7 +140,7 @@ function getPublicGroups(spreadsheet) {
         facultyId: group.Adviser,
 
         thumbnail: group.Thumbnail,
-        proposalLink: group.ProposalLink,
+        researchPaperLink: group.ResearchPaperLink,
         pitchVideoLink: group.PitchVideoLink,
         members: membersByGroupCode[normalizeGroupCode(group.GroupCode)] || [],
 
@@ -658,9 +658,10 @@ function doPost(e) {
           throw new Error("Group Code is required.");
         }
 
-        const proposalRating = validateRating(payload.proposalRating);
+        const researchPaperRating = validateRating(payload.researchPaperRating);
         const pitchVideoRating = validateRating(payload.pitchVideoRating);
         const posterRating = validateRating(payload.posterRating);
+        const logoRating = validateRating(payload.logoRating);
         const comment = payload.comment === undefined ? "" : payload.comment;
         if (typeof comment !== "string") {
           throw new Error("Comment must be text.");
@@ -710,16 +711,22 @@ function doPost(e) {
           "Asia/Manila",
           "yyyy-MM-dd HH:mm:ss"
         );
-        evalSheet.appendRow([
-          evaluationId,
-          evaluatorId,
-          groupCode,
-          proposalRating,
-          pitchVideoRating,
-          posterRating,
-          comment.trim(),
-          submittedAt
-        ]);
+        const evaluation = {
+          EvaluationID: evaluationId,
+          StudentID: evaluatorId,
+          GroupCode: groupCode,
+          ResearchPaperRating: researchPaperRating,
+          PitchVideoRating: pitchVideoRating,
+          PosterRating: posterRating,
+          LogoRating: logoRating,
+          Comment: comment.trim(),
+          SubmittedAt: submittedAt
+        };
+        evalSheet.appendRow(
+          getEvaluationHeaders(evalSheet).map(function(header) {
+            return evaluation[header];
+          })
+        );
 
         return responseJSON({
           success: true,
@@ -1014,9 +1021,10 @@ const EVALUATION_HEADERS = [
   "EvaluationID",
   "StudentID",
   "GroupCode",
-  "ProposalRating",
+  "ResearchPaperRating",
   "PitchVideoRating",
   "PosterRating",
+  "LogoRating",
   "Comment",
   "SubmittedAt"
 ];
@@ -1217,7 +1225,7 @@ function getAuthenticatedStudent(spreadsheet, sessionToken) {
   };
 }
 
-function getEvaluationRows(sheet) {
+function getEvaluationHeaders(sheet) {
   const lastColumn = sheet.getLastColumn();
   const headers = lastColumn > 0
     ? sheet.getRange(1, 1, 1, lastColumn).getDisplayValues()[0].map(function(header) {
@@ -1226,15 +1234,20 @@ function getEvaluationRows(sheet) {
     : [];
   if (
     headers.length !== EVALUATION_HEADERS.length ||
-    !EVALUATION_HEADERS.every(function(header, index) {
-      return headers[index] === header;
+    !EVALUATION_HEADERS.every(function(header) {
+      return headers.indexOf(header) !== -1;
     })
   ) {
     throw new Error(
-      "The Evaluations sheet must use the existing columns in this order: " +
+      "The Evaluations sheet must include these columns: " +
       EVALUATION_HEADERS.join(", ")
     );
   }
+  return headers;
+}
+
+function getEvaluationRows(sheet) {
+  getEvaluationHeaders(sheet);
   return getSheetData(sheet);
 }
 
@@ -1263,9 +1276,10 @@ function getRatingAnalyticsRows(spreadsheet, evaluations) {
       EvaluationID: evaluation.EvaluationID,
       StudentID: evaluatorId,
       GroupCode: evaluation.GroupCode,
-      ProposalRating: evaluation.ProposalRating,
+      ResearchPaperRating: evaluation.ResearchPaperRating,
       PitchVideoRating: evaluation.PitchVideoRating,
       PosterRating: evaluation.PosterRating,
+      LogoRating: evaluation.LogoRating,
       SubmittedAt: evaluation.SubmittedAt,
       EvaluatorType: evaluatorType
     };
@@ -1543,6 +1557,7 @@ function responseJSON(data) {
 // evaluation id generation
 function generateEvaluationId(sheet) {
   const lastRow = sheet.getLastRow();
+  const idColumn = getEvaluationHeaders(sheet).indexOf("EvaluationID") + 1;
 
   // First evaluation
   if (lastRow <= 1) {
@@ -1550,7 +1565,7 @@ function generateEvaluationId(sheet) {
   }
 
   const existingIds = sheet
-    .getRange(2, 1, lastRow - 1, 1)
+    .getRange(2, idColumn, lastRow - 1, 1)
     .getDisplayValues()
     .flat();
 
